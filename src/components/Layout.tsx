@@ -43,6 +43,7 @@ import CategoryIcon from '@mui/icons-material/Category';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import FactoryIcon from '@mui/icons-material/Factory';
 import HomeIcon from '@mui/icons-material/Home';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 
 const DRAWER_WIDTH = 260;
 const COLLAPSED_DRAWER_WIDTH = 70;
@@ -129,6 +130,13 @@ export const Layout: React.FC = () => {
       icon: <PrecisionManufacturingIcon />,
       module: 'production',
       action: 'create',
+    },
+    {
+      title: 'Production Planning',
+      path: '/production-planning',
+      icon: <CalendarMonthIcon />,
+      module: 'production',
+      action: 'view',
     },
     {
       title: 'Administration',

@@ -26,6 +26,7 @@ import { DowntimeDashboard } from './pages/DowntimeDashboard';
 import { ProductionDashboard } from './pages/ProductionDashboard';
 import { DowntimeEntry } from './pages/DowntimeEntry';
 import { ProductionEntry } from './pages/ProductionEntry';
+import { ProductionPlanning } from './pages/ProductionPlanning';
 
 // Masters Pages
 import { Plants } from './pages/Masters/Plants';
@@ -75,7 +76,7 @@ function App() {
             // Profile doc doesn't exist yet, check if it's the default admin account
             if (user.email === 'admin@gmail.com') {
               const tenantId = 'admin_tenant_gmail';
-              
+
               // Seed global roles if missing
               await seedGlobalRoles();
 
@@ -197,6 +198,14 @@ function App() {
                 element={
                   <GuardedRoute module="production" action="create">
                     <ProductionEntry />
+                  </GuardedRoute>
+                }
+              />
+              <Route
+                path="production-planning"
+                element={
+                  <GuardedRoute module="production" action="view">
+                    <ProductionPlanning />
                   </GuardedRoute>
                 }
               />

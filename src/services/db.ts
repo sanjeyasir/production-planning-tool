@@ -295,3 +295,142 @@ export const logActivity = async (
   // Audit logging deactivated per requirement
   return Promise.resolve();
 };
+
+// ----------------------------------------------------
+// PRODUCTION ORDERS
+// ----------------------------------------------------
+export interface ProductionOrder {
+  id: string;
+  tenantId: string;
+  orderNumber: string;
+  productName: string;
+  categoryId: string;
+  quantity: number;
+  dueDate: Date;
+  status: 'PENDING' | 'SCHEDULED' | 'COMPLETED';
+  createdAt: Date;
+  priority?: 'HIGH' | 'MEDIUM' | 'LOW';
+}
+
+export const getProductionOrders = (tenantId: string) => 
+  listTenantCollection<ProductionOrder>('production_orders', tenantId);
+
+export const createProductionOrder = async (data: Omit<ProductionOrder, 'id' | 'createdAt'>) => {
+  const colRef = collection(db, 'production_orders');
+  const docRef = await addDoc(colRef, {
+    ...data,
+    createdAt: new Date()
+  });
+  return docRef.id;
+};
+
+export const updateProductionOrder = async (id: string, data: Partial<Omit<ProductionOrder, 'id' | 'createdAt'>>) => {
+  const docRef = doc(db, 'production_orders', id);
+  await updateDoc(docRef, data);
+};
+
+export const deleteProductionOrder = async (id: string) => {
+  const docRef = doc(db, 'production_orders', id);
+  await deleteDoc(docRef);
+};
+
+// ----------------------------------------------------
+// HOLIDAYS
+// ----------------------------------------------------
+export interface Holiday {
+  id: string;
+  tenantId: string;
+  date: Date;
+  name: string;
+  createdAt: Date;
+}
+
+export const getHolidays = (tenantId: string) => 
+  listTenantCollection<Holiday>('holidays', tenantId);
+
+export const createHoliday = async (data: Omit<Holiday, 'id' | 'createdAt'>) => {
+  const colRef = collection(db, 'holidays');
+  const docRef = await addDoc(colRef, {
+    ...data,
+    createdAt: new Date()
+  });
+  return docRef.id;
+};
+
+export const deleteHoliday = async (id: string) => {
+  const docRef = doc(db, 'holidays', id);
+  await deleteDoc(docRef);
+};
+
+// ----------------------------------------------------
+// PRODUCTION PLANS
+// ----------------------------------------------------
+export interface ProductionPlan {
+  id: string;
+  tenantId: string;
+  orderId: string;
+  machineId: string;
+  startTime: Date;
+  endTime: Date;
+  type: 'CONFIRMED' | 'SIMULATED';
+  plannedHourlyRate: number;
+  createdAt: Date;
+}
+
+export const getProductionPlans = (tenantId: string) => 
+  listTenantCollection<ProductionPlan>('production_plans', tenantId);
+
+export const createProductionPlan = async (data: Omit<ProductionPlan, 'id' | 'createdAt'>) => {
+  const colRef = collection(db, 'production_plans');
+  const docRef = await addDoc(colRef, {
+    ...data,
+    createdAt: new Date()
+  });
+  return docRef.id;
+};
+
+export const updateProductionPlan = async (id: string, data: Partial<Omit<ProductionPlan, 'id' | 'createdAt'>>) => {
+  const docRef = doc(db, 'production_plans', id);
+  await updateDoc(docRef, data);
+};
+
+export const deleteProductionPlan = async (id: string) => {
+  const docRef = doc(db, 'production_plans', id);
+  await deleteDoc(docRef);
+};
+
+// ----------------------------------------------------
+// HOURLY PRODUCTION DATA
+// ----------------------------------------------------
+export interface HourlyProduction {
+  id: string;
+  tenantId: string;
+  planId: string;
+  date: Date;
+  hour: number; // 0-23
+  budget: number;
+  actual: number;
+  createdAt: Date;
+}
+
+export const getHourlyProductions = (tenantId: string) => 
+  listTenantCollection<HourlyProduction>('hourly_production', tenantId);
+
+export const createHourlyProduction = async (data: Omit<HourlyProduction, 'id' | 'createdAt'>) => {
+  const colRef = collection(db, 'hourly_production');
+  const docRef = await addDoc(colRef, {
+    ...data,
+    createdAt: new Date()
+  });
+  return docRef.id;
+};
+
+export const updateHourlyProduction = async (id: string, data: Partial<Omit<HourlyProduction, 'id' | 'createdAt'>>) => {
+  const docRef = doc(db, 'hourly_production', id);
+  await updateDoc(docRef, data);
+};
+
+export const deleteHourlyProduction = async (id: string) => {
+  const docRef = doc(db, 'hourly_production', id);
+  await deleteDoc(docRef);
+};
