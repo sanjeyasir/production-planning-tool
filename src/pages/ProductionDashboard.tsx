@@ -18,9 +18,8 @@ import {
   MenuItem,
   TextField,
   CircularProgress,
-  Paper,
   Avatar,
-  Stack,
+  Stack
 } from '@mui/material';
 import {
   ResponsiveContainer,
@@ -45,6 +44,7 @@ import RemoveCircleIcon from '@mui/icons-material/RemoveCircle';
 import StarIcon from '@mui/icons-material/Star';
 import DangerousIcon from '@mui/icons-material/Dangerous';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import BarChartIcon from '@mui/icons-material/BarChart';
 
 export const ProductionDashboard: React.FC = () => {
   const { tenant } = useAuthStore();
@@ -141,7 +141,6 @@ export const ProductionDashboard: React.FC = () => {
     const start = new Date(startDate);
     const end = new Date(endDate);
 
-    // Pre-populate days range
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const key = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       daysMap[key] = { date: key, budget: 0, planned: 0, actual: 0 };
@@ -187,40 +186,39 @@ export const ProductionDashboard: React.FC = () => {
 
   if (loadingRecords) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexGrow: 1 }}>
-        <CircularProgress color="primary" size={50} />
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 12 }}>
+        <CircularProgress color="primary" size={40} />
       </Box>
     );
   }
 
   return (
-    <Box>
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 800, color: 'text.primary', mb: 0.5 }}>
-            Production Overview
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Monitor manufacturing output against targets and inspect overall product quality.
-          </Typography>
-        </Box>
+    <Box sx={{ py: 1 }}>
+      {/* Title & Description */}
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <BarChartIcon sx={{ color: '#10b981' }} />
+          Production Analytics & Yield Overview
+        </Typography>
+        <Typography variant="body2" sx={{ color: '#64748b', mt: 0.3 }}>
+          Inspect manufacturing performance metrics against targets, scrap rates, and category outputs.
+        </Typography>
       </Box>
 
       {/* Filter Panel */}
-      <Paper
-        elevation={0}
+      <Card
         sx={{
           p: 2.5,
-          mb: 4,
-          borderRadius: '16px',
-          border: '1px solid rgba(255, 255, 255, 0.06)',
-          background: 'rgba(15, 23, 42, 0.3)',
-          backdropFilter: 'blur(10px)',
+          mb: 3,
+          borderRadius: '14px',
+          border: '1px solid #e2e8f0',
+          bgcolor: '#ffffff',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
         }}
       >
-        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 2, color: 'primary.light' }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 2, color: '#6366f1' }}>
           <FilterListIcon fontSize="small" />
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+          <Typography variant="caption" sx={{ fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
             Filter Console
           </Typography>
         </Stack>
@@ -249,7 +247,7 @@ export const ProductionDashboard: React.FC = () => {
             </FormControl>
           </Grid>
 
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Grid size={{ xs: 6, sm: 6, md: 3 }}>
             <TextField
               label="Start Date"
               type="date"
@@ -261,7 +259,7 @@ export const ProductionDashboard: React.FC = () => {
             />
           </Grid>
 
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Grid size={{ xs: 6, sm: 6, md: 3 }}>
             <TextField
               label="End Date"
               type="date"
@@ -273,24 +271,24 @@ export const ProductionDashboard: React.FC = () => {
             />
           </Grid>
         </Grid>
-      </Paper>
+      </Card>
 
       {/* KPI Section */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Grid container spacing={2} sx={{ mb: 3 }}>
         {/* KPI: Budget */}
-        <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-          <Card>
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Card sx={{ borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <CardContent sx={{ p: '14px 12px !important' }}>
               <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase', fontSize: '0.65rem', display: 'block' }}>
                     Total Budget
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.5, color: '#3b82f6' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.2, color: '#3b82f6', fontSize: '1.2rem' }}>
                     {kpis.budget.toLocaleString()}
                   </Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', width: 36, height: 36 }}>
+                <Avatar sx={{ bgcolor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', width: 34, height: 34 }}>
                   <CalendarMonthIcon sx={{ fontSize: 18 }} />
                 </Avatar>
               </Stack>
@@ -299,19 +297,19 @@ export const ProductionDashboard: React.FC = () => {
         </Grid>
 
         {/* KPI: Planned */}
-        <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-          <Card>
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Card sx={{ borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <CardContent sx={{ p: '14px 12px !important' }}>
               <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Planned Volume
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase', fontSize: '0.65rem', display: 'block' }}>
+                    Planned Vol.
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.5, color: '#fbbf24' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.2, color: '#f59e0b', fontSize: '1.2rem' }}>
                     {kpis.planned.toLocaleString()}
                   </Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', width: 36, height: 36 }}>
+                <Avatar sx={{ bgcolor: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', width: 34, height: 34 }}>
                   <FlagIcon sx={{ fontSize: 18 }} />
                 </Avatar>
               </Stack>
@@ -320,19 +318,19 @@ export const ProductionDashboard: React.FC = () => {
         </Grid>
 
         {/* KPI: Actual Production */}
-        <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-          <Card>
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Card sx={{ borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <CardContent sx={{ p: '14px 12px !important' }}>
               <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase', fontSize: '0.65rem', display: 'block' }}>
                     Actual Output
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.5, color: '#10b981' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.2, color: '#10b981', fontSize: '1.2rem' }}>
                     {kpis.actual.toLocaleString()}
                   </Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: 'rgba(16, 185, 129, 0.1)', color: '#10b981', width: 36, height: 36 }}>
+                <Avatar sx={{ bgcolor: 'rgba(16, 185, 129, 0.1)', color: '#10b981', width: 34, height: 34 }}>
                   <CheckCircleIcon sx={{ fontSize: 18 }} />
                 </Avatar>
               </Stack>
@@ -341,19 +339,19 @@ export const ProductionDashboard: React.FC = () => {
         </Grid>
 
         {/* KPI: Remaining Balance */}
-        <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-          <Card>
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Card sx={{ borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <CardContent sx={{ p: '14px 12px !important' }}>
               <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase', fontSize: '0.65rem', display: 'block' }}>
                     Remaining Bal.
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.5, color: kpis.balance > 0 ? '#fbbf24' : 'text.primary' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.2, color: kpis.balance > 0 ? '#d97706' : '#64748b', fontSize: '1.2rem' }}>
                     {kpis.balance.toLocaleString()}
                   </Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: 'rgba(255, 255, 255, 0.04)', color: 'text.secondary', width: 36, height: 36 }}>
+                <Avatar sx={{ bgcolor: 'rgba(0, 0, 0, 0.04)', color: '#64748b', width: 34, height: 34 }}>
                   <RemoveCircleIcon sx={{ fontSize: 18 }} />
                 </Avatar>
               </Stack>
@@ -362,19 +360,19 @@ export const ProductionDashboard: React.FC = () => {
         </Grid>
 
         {/* KPI: Achievement Rate */}
-        <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-          <Card>
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Card sx={{ borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <CardContent sx={{ p: '14px 12px !important' }}>
               <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase', fontSize: '0.65rem', display: 'block' }}>
                     Achievement
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.5, color: kpis.achievementPercent >= 90 ? '#10b981' : '#f59e0b' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.2, color: kpis.achievementPercent >= 90 ? '#10b981' : '#f59e0b', fontSize: '1.2rem' }}>
                     {kpis.achievementPercent.toFixed(1)}%
                   </Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', width: 36, height: 36 }}>
+                <Avatar sx={{ bgcolor: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', width: 34, height: 34 }}>
                   <StarIcon sx={{ fontSize: 18 }} />
                 </Avatar>
               </Stack>
@@ -383,19 +381,19 @@ export const ProductionDashboard: React.FC = () => {
         </Grid>
 
         {/* KPI: Reject Rate */}
-        <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-          <Card>
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <Card sx={{ borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <CardContent sx={{ p: '14px 12px !important' }}>
               <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase', fontSize: '0.65rem', display: 'block' }}>
                     Reject Rate
                   </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.5, color: kpis.rejectRate > 2.5 ? '#ef4444' : '#10b981' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.2, color: kpis.rejectRate > 2.5 ? '#ef4444' : '#10b981', fontSize: '1.2rem' }}>
                     {kpis.rejectRate.toFixed(2)}%
                   </Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', width: 36, height: 36 }}>
+                <Avatar sx={{ bgcolor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', width: 34, height: 34 }}>
                   <DangerousIcon sx={{ fontSize: 18 }} />
                 </Avatar>
               </Stack>
@@ -408,20 +406,20 @@ export const ProductionDashboard: React.FC = () => {
       <Grid container spacing={3}>
         {/* Trend Area Chart (Planned vs Actual) */}
         <Grid size={{ xs: 12, md: 8 }}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
-                Daily Production Output vs Targets
+          <Card sx={{ height: '100%', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a', mb: 2 }}>
+                Daily Production Output vs. Targets
               </Typography>
-              <Box sx={{ width: '100%', height: 300 }}>
+              <Box sx={{ width: '100%', height: 280 }}>
                 {progressData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={progressData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="date" stroke="#64748b" style={{ fontSize: '0.75rem' }} />
-                      <YAxis stroke="#64748b" style={{ fontSize: '0.75rem' }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="date" stroke="#94a3b8" style={{ fontSize: '0.75rem' }} />
+                      <YAxis stroke="#94a3b8" style={{ fontSize: '0.75rem' }} />
                       <Tooltip
-                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: 8 }}
+                        contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#0f172a' }}
                       />
                       <Legend wrapperStyle={{ fontSize: '0.75rem', paddingTop: '10px' }} />
                       <Line type="monotone" dataKey="budget" name="Budget" stroke="#3b82f6" strokeWidth={2} dot={false} strokeDasharray="5 5" />
@@ -441,12 +439,12 @@ export const ProductionDashboard: React.FC = () => {
 
         {/* Quality Pie Chart */}
         <Grid size={{ xs: 12, md: 4 }}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-                Quality Ratio analysis
+          <Card sx={{ height: '100%', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a', mb: 2 }}>
+                Quality Ratio Breakdown
               </Typography>
-              <Box sx={{ width: '100%', height: 260, display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
+              <Box sx={{ width: '100%', height: 200, display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
                 {kpis.actual > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -454,8 +452,8 @@ export const ProductionDashboard: React.FC = () => {
                         data={qualityData.filter(d => d.value > 0)}
                         cx="50%"
                         cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
+                        innerRadius={50}
+                        outerRadius={75}
                         paddingAngle={5}
                         dataKey="value"
                       >
@@ -463,7 +461,7 @@ export const ProductionDashboard: React.FC = () => {
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip />
+                      <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#0f172a' }} />
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
@@ -471,10 +469,10 @@ export const ProductionDashboard: React.FC = () => {
                 )}
                 {kpis.actual > 0 && (
                   <Box sx={{ position: 'absolute', textAlign: 'center' }}>
-                    <Typography variant="h5" sx={{ fontWeight: 800, color: '#10b981' }}>
+                    <Typography variant="h6" sx={{ fontWeight: 800, color: '#10b981' }}>
                       {(100 - kpis.rejectRate).toFixed(1)}%
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>
                       Yield Rate
                     </Typography>
                   </Box>
@@ -482,22 +480,22 @@ export const ProductionDashboard: React.FC = () => {
               </Box>
               {/* Custom Legend */}
               {kpis.actual > 0 && (
-                <Stack spacing={1.5} sx={{ mt: 1 }}>
+                <Stack spacing={1} sx={{ mt: 2 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                      <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#10b981' }} />
-                      <Typography variant="body2" color="text.secondary">Accepted</Typography>
+                      <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#10b981' }} />
+                      <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>Accepted Yield</Typography>
                     </Stack>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#0f172a' }}>
                       {kpis.accepted.toLocaleString()} units
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                      <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#ef4444' }} />
-                      <Typography variant="body2" color="text.secondary">Rejected</Typography>
+                      <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#ef4444' }} />
+                      <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>Scrap Rejects</Typography>
                     </Stack>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#ef4444' }}>
                       {kpis.rejected.toLocaleString()} units
                     </Typography>
                   </Box>
@@ -508,30 +506,30 @@ export const ProductionDashboard: React.FC = () => {
         </Grid>
 
         {/* Category Performance Targets */}
-        <Grid size={12}>
-          <Card sx={{ mt: 3 }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
-                Production Output vs Plan by Category
+        <Grid size={{ xs: 12 }}>
+          <Card sx={{ borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a', mb: 2 }}>
+                Output vs Planned Target by Category
               </Typography>
-              <Box sx={{ width: '100%', height: 320 }}>
+              <Box sx={{ width: '100%', height: 300 }}>
                 {categoryPerformance.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={categoryPerformance} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="category" stroke="#64748b" style={{ fontSize: '0.75rem' }} />
-                      <YAxis stroke="#64748b" style={{ fontSize: '0.75rem' }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="category" stroke="#94a3b8" style={{ fontSize: '0.75rem' }} />
+                      <YAxis stroke="#94a3b8" style={{ fontSize: '0.75rem' }} />
                       <Tooltip
-                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: 8 }}
+                        contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#0f172a' }}
                       />
                       <Legend wrapperStyle={{ fontSize: '0.75rem', paddingTop: '10px' }} />
-                      <Bar dataKey="target" name="Target Plan" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={50} />
-                      <Bar dataKey="actual" name="Actual Production" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                      <Bar dataKey="target" name="Target Plan" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={45} />
+                      <Bar dataKey="actual" name="Actual Production" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={45} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
                   <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                    <Typography color="text.secondary">No category performance data found for the date range</Typography>
+                    <Typography color="text.secondary">No category performance data found for the selected date range</Typography>
                   </Box>
                 )}
               </Box>

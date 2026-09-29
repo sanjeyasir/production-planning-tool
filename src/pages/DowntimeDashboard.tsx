@@ -28,6 +28,7 @@ import {
   TableRow,
   Avatar,
   Stack,
+  Chip
 } from '@mui/material';
 import {
   ResponsiveContainer,
@@ -41,13 +42,13 @@ import {
   ComposedChart,
   Line,
   Cell,
-  Legend,
 } from 'recharts';
 
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import ErrorIcon from '@mui/icons-material/Error';
 import PercentIcon from '@mui/icons-material/Percent';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import DashboardIcon from '@mui/icons-material/Dashboard';
 
 export const DowntimeDashboard: React.FC = () => {
   const { tenant } = useAuthStore();
@@ -118,17 +119,13 @@ export const DowntimeDashboard: React.FC = () => {
   // 4. Calculate KPIs
   const kpis = useMemo(() => {
     const totalEvents = filteredRecords.length;
-    
-    // Total duration in filtered set
     const totalDowntime = filteredRecords.reduce((sum, r) => sum + r.duration, 0);
     
-    // Today's total downtime
     const todayStr = new Date().toDateString();
     const todayDowntime = records
       .filter((r) => new Date(r.startTime).toDateString() === todayStr)
       .reduce((sum, r) => sum + r.duration, 0);
 
-    // MTD (Month To Date) total downtime
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
     const mtdDowntime = records
@@ -138,8 +135,6 @@ export const DowntimeDashboard: React.FC = () => {
       })
       .reduce((sum, r) => sum + r.duration, 0);
 
-    // Machine Availability Calculation:
-    // Scheduled time = Days in filter * active machines * 24 hours
     const start = new Date(startDate);
     const end = new Date(endDate);
     const diffTime = Math.abs(end.getTime() - start.getTime());
@@ -169,7 +164,6 @@ export const DowntimeDashboard: React.FC = () => {
     const start = new Date(startDate);
     const end = new Date(endDate);
 
-    // Pre-populate days range with 0s
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const key = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       daysMap[key] = 0;
@@ -192,7 +186,6 @@ export const DowntimeDashboard: React.FC = () => {
   const machineRankings = useMemo(() => {
     const machMap: { [id: string]: { name: string; code: string; duration: number } } = {};
     
-    // Initialize active machines
     machines.forEach((m) => {
       if (selectedPlant === 'all' || m.plantId === selectedPlant) {
         machMap[m.id] = { name: m.machineName, code: m.machineCode, duration: 0 };
@@ -203,7 +196,6 @@ export const DowntimeDashboard: React.FC = () => {
       if (machMap[r.machineId]) {
         machMap[r.machineId].duration += r.duration;
       } else {
-        // Fallback for deleted or unseeded machines in the list
         const mObj = machines.find(m => m.id === r.machineId);
         machMap[r.machineId] = { 
           name: mObj?.machineName || 'Unknown Machine', 
@@ -213,7 +205,6 @@ export const DowntimeDashboard: React.FC = () => {
       }
     });
 
-    // Calculate availability for each
     const start = new Date(startDate);
     const end = new Date(endDate);
     const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) || 1;
@@ -231,7 +222,7 @@ export const DowntimeDashboard: React.FC = () => {
           availability: av,
         };
       })
-      .sort((a, b) => b.downtime - a.downtime); // Rank by highest downtime
+      .sort((a, b) => b.downtime - a.downtime);
   }, [filteredRecords, machines, selectedPlant, startDate, endDate]);
 
   // 7. Chart Data: Pareto Chart
@@ -248,7 +239,6 @@ export const DowntimeDashboard: React.FC = () => {
       }
     });
 
-    // Sort categories descending by duration
     const sortedCats = Object.values(catMap)
       .filter((c) => c.duration > 0)
       .sort((a, b) => b.duration - a.duration);
@@ -273,40 +263,39 @@ export const DowntimeDashboard: React.FC = () => {
 
   if (loadingRecords) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexGrow: 1 }}>
-        <CircularProgress color="primary" size={50} />
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 12 }}>
+        <CircularProgress color="primary" size={40} />
       </Box>
     );
   }
 
   return (
-    <Box>
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 800, color: 'text.primary', mb: 0.5 }}>
-            Downtime Analytics
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Analyze machine efficiency, downtime events, and cumulative operational losses.
-          </Typography>
-        </Box>
+    <Box sx={{ py: 1 }}>
+      {/* Title & Description */}
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <DashboardIcon sx={{ color: '#ef4444' }} />
+          Machine Downtime Analytics
+        </Typography>
+        <Typography variant="body2" sx={{ color: '#64748b', mt: 0.3 }}>
+          Analyze line availability, stoppage durations, Pareto root causes, and machine reliability metrics.
+        </Typography>
       </Box>
 
       {/* Filter Panel */}
-      <Paper
-        elevation={0}
+      <Card
         sx={{
           p: 2.5,
-          mb: 4,
-          borderRadius: '16px',
-          border: '1px solid rgba(255, 255, 255, 0.06)',
-          background: 'rgba(15, 23, 42, 0.3)',
-          backdropFilter: 'blur(10px)',
+          mb: 3,
+          borderRadius: '14px',
+          border: '1px solid #e2e8f0',
+          bgcolor: '#ffffff',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
         }}
       >
-        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 2, color: 'primary.light' }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 2, color: '#6366f1' }}>
           <FilterListIcon fontSize="small" />
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+          <Typography variant="caption" sx={{ fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
             Filter Console
           </Typography>
         </Stack>
@@ -361,7 +350,7 @@ export const DowntimeDashboard: React.FC = () => {
             </FormControl>
           </Grid>
 
-          <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+          <Grid size={{ xs: 6, sm: 6, md: 2 }}>
             <TextField
               label="Start Date"
               type="date"
@@ -373,7 +362,7 @@ export const DowntimeDashboard: React.FC = () => {
             />
           </Grid>
 
-          <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+          <Grid size={{ xs: 6, sm: 6, md: 2 }}>
             <TextField
               label="End Date"
               type="date"
@@ -385,84 +374,84 @@ export const DowntimeDashboard: React.FC = () => {
             />
           </Grid>
         </Grid>
-      </Paper>
+      </Card>
 
       {/* KPI Section */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card>
-            <CardContent>
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid size={{ xs: 6, sm: 6, md: 3 }}>
+          <Card sx={{ borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase', fontSize: '0.675rem', display: 'block' }}>
                     Downtime Today
                   </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 800, mt: 1, color: '#f87171' }}>
-                    {kpis.todayDowntime} <span style={{ fontSize: '1rem', fontWeight: 500 }}>mins</span>
+                  <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.5, color: '#ef4444' }}>
+                    {kpis.todayDowntime} <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b' }}>mins</span>
                   </Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
-                  <AccessTimeIcon />
+                <Avatar sx={{ bgcolor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', width: 36, height: 36 }}>
+                  <AccessTimeIcon sx={{ fontSize: 20 }} />
                 </Avatar>
               </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card>
-            <CardContent>
+        <Grid size={{ xs: 6, sm: 6, md: 3 }}>
+          <Card sx={{ borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase', fontSize: '0.675rem', display: 'block' }}>
                     Downtime MTD
                   </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 800, mt: 1, color: '#f87171' }}>
-                    {kpis.mtdDowntime} <span style={{ fontSize: '1rem', fontWeight: 500 }}>mins</span>
+                  <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.5, color: '#ef4444' }}>
+                    {kpis.mtdDowntime} <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748b' }}>mins</span>
                   </Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
-                  <AccessTimeIcon />
+                <Avatar sx={{ bgcolor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', width: 36, height: 36 }}>
+                  <AccessTimeIcon sx={{ fontSize: 20 }} />
                 </Avatar>
               </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card>
-            <CardContent>
+        <Grid size={{ xs: 6, sm: 6, md: 3 }}>
+          <Card sx={{ borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Downtime Events
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase', fontSize: '0.675rem', display: 'block' }}>
+                    Stoppage Events
                   </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 800, mt: 1, color: '#fbbf24' }}>
+                  <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.5, color: '#f59e0b' }}>
                     {kpis.totalEvents}
                   </Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' }}>
-                  <ErrorIcon />
+                <Avatar sx={{ bgcolor: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', width: 36, height: 36 }}>
+                  <ErrorIcon sx={{ fontSize: 20 }} />
                 </Avatar>
               </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card>
-            <CardContent>
+        <Grid size={{ xs: 6, sm: 6, md: 3 }}>
+          <Card sx={{ borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <CardContent sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#64748b', textTransform: 'uppercase', fontSize: '0.675rem', display: 'block' }}>
                     Machine Availability
                   </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 800, mt: 1, color: '#34d399' }}>
-                    {kpis.availability.toFixed(2)}<span style={{ fontSize: '1.2rem', fontWeight: 600 }}>%</span>
+                  <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.5, color: '#10b981' }}>
+                    {kpis.availability.toFixed(2)}<span style={{ fontSize: '1rem', fontWeight: 600 }}>%</span>
                   </Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
-                  <PercentIcon />
+                <Avatar sx={{ bgcolor: 'rgba(16, 185, 129, 0.1)', color: '#10b981', width: 36, height: 36 }}>
+                  <PercentIcon sx={{ fontSize: 20 }} />
                 </Avatar>
               </Box>
             </CardContent>
@@ -471,37 +460,36 @@ export const DowntimeDashboard: React.FC = () => {
       </Grid>
 
       {/* Charts Section */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Grid container spacing={3} sx={{ mb: 3 }}>
         {/* Trend Area Chart */}
         <Grid size={{ xs: 12, md: 8 }}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
-                Daily Downtime Trend
+          <Card sx={{ height: '100%', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a', mb: 2 }}>
+                Daily Downtime Occurrence Trend
               </Typography>
-              <Box sx={{ width: '100%', height: 300 }}>
+              <Box sx={{ width: '100%', height: 280 }}>
                 {trendData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorMinutes" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4} />
+                          <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
                           <stop offset="95%" stopColor="#ef4444" stopOpacity={0.0} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="date" stroke="#64748b" style={{ fontSize: '0.75rem' }} />
-                      <YAxis stroke="#64748b" style={{ fontSize: '0.75rem' }} unit="m" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="date" stroke="#94a3b8" style={{ fontSize: '0.75rem' }} />
+                      <YAxis stroke="#94a3b8" style={{ fontSize: '0.75rem' }} unit="m" />
                       <Tooltip
-                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: 8 }}
-                        labelStyle={{ color: '#fff', fontWeight: 600 }}
+                        contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#0f172a' }}
                       />
-                      <Area type="monotone" dataKey="minutes" name="Downtime Minutes" stroke="#ef4444" strokeWidth={2.5} fillOpacity={1} fill="url(#colorMinutes)" />
+                      <Area type="monotone" dataKey="minutes" name="Downtime (mins)" stroke="#ef4444" strokeWidth={2.5} fillOpacity={1} fill="url(#colorMinutes)" />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
                   <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                    <Typography color="text.secondary">No trend data available for filters</Typography>
+                    <Typography color="text.secondary">No downtime trend data found</Typography>
                   </Box>
                 )}
               </Box>
@@ -511,34 +499,31 @@ export const DowntimeDashboard: React.FC = () => {
 
         {/* Pareto Chart */}
         <Grid size={{ xs: 12, md: 4 }}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
-                Downtime Pareto Analysis
+          <Card sx={{ height: '100%', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a', mb: 2 }}>
+                Pareto Analysis (Top Stoppage Reasons)
               </Typography>
-              <Box sx={{ width: '100%', height: 300 }}>
+              <Box sx={{ width: '100%', height: 280 }}>
                 {paretoData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={paretoData} margin={{ top: 10, right: -5, left: -25, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" />
-                      <XAxis dataKey="category" stroke="#64748b" style={{ fontSize: '0.675rem' }} />
-                      <YAxis yAxisId="left" stroke="#64748b" style={{ fontSize: '0.75rem' }} />
-                      <YAxis yAxisId="right" orientation="right" domain={[0, 100]} stroke="#64748b" style={{ fontSize: '0.75rem' }} unit="%" />
-                      <Tooltip
-                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: 8 }}
-                      />
+                    <ComposedChart data={paretoData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="category" stroke="#94a3b8" style={{ fontSize: '0.7rem' }} />
+                      <YAxis yAxisId="left" stroke="#94a3b8" style={{ fontSize: '0.7rem' }} />
+                      <YAxis yAxisId="right" orientation="right" domain={[0, 100]} stroke="#94a3b8" style={{ fontSize: '0.7rem' }} unit="%" />
+                      <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#0f172a' }} />
                       <Bar yAxisId="left" dataKey="downtime" name="Minutes" fill="#6366f1" radius={[4, 4, 0, 0]}>
                         {paretoData.map((_, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Bar>
-                      <Line yAxisId="right" type="monotone" dataKey="cumulative" name="Cumulative %" stroke="#ef4444" strokeWidth={2.5} dot={{ r: 4 }} />
-                      <Legend wrapperStyle={{ fontSize: '0.75rem', paddingTop: '10px' }} />
+                      <Line yAxisId="right" type="monotone" dataKey="cumulative" name="Cumulative %" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 3 }} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 ) : (
                   <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                    <Typography color="text.secondary">No category data available</Typography>
+                    <Typography color="text.secondary">No downtime category records</Typography>
                   </Box>
                 )}
               </Box>
@@ -547,48 +532,55 @@ export const DowntimeDashboard: React.FC = () => {
         </Grid>
       </Grid>
 
-      {/* Machine Performance Table / Rankings */}
-      <Card>
-        <CardContent sx={{ px: 0 }}>
-          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, px: 3 }}>
-            Machine Performance & Availability Ranking
+      {/* Machine Availability Table */}
+      <Card sx={{ borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+        <CardContent sx={{ p: 3 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a', mb: 2 }}>
+            Machine Availability & Performance Ranking
           </Typography>
-          <TableContainer>
-            <Table>
+          <TableContainer component={Paper} sx={{ border: '1px solid #e2e8f0', borderRadius: '12px', bgcolor: '#ffffff' }}>
+            <Table size="small">
               <TableHead>
-                <TableRow sx={{ borderBottom: '2px solid rgba(255,255,255,0.08)' }}>
-                  <TableCell sx={{ pl: 3, fontWeight: 700, color: 'text.secondary' }}>Machine Code</TableCell>
-                  <TableCell sx={{ fontWeight: 700, color: 'text.secondary' }}>Machine Name</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, color: 'text.secondary' }}>Total Downtime</TableCell>
-                  <TableCell align="right" sx={{ pr: 3, fontWeight: 700, color: 'text.secondary' }}>Availability Rate</TableCell>
+                <TableRow>
+                  <TableCell>Machine Code</TableCell>
+                  <TableCell>Machine Name</TableCell>
+                  <TableCell align="right">Downtime (Mins)</TableCell>
+                  <TableCell align="right">Availability Rate</TableCell>
+                  <TableCell align="center">Status Indicator</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {machineRankings.length > 0 ? (
-                  machineRankings.map((item) => (
-                    <TableRow 
-                      key={item.id}
-                      sx={{ 
-                        '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' },
-                        borderBottom: '1px solid rgba(255, 255, 255, 0.04)' 
-                      }}
-                    >
-                      <TableCell sx={{ pl: 3, fontWeight: 600 }}>{item.code}</TableCell>
-                      <TableCell>{item.machine}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600, color: item.downtime > 0 ? '#ef4444' : 'text.primary' }}>
-                        {item.downtime} mins
+                {machineRankings.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center" sx={{ py: 4, color: '#64748b' }}>
+                      No machines registered or found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  machineRankings.map((m) => (
+                    <TableRow key={m.id} hover>
+                      <TableCell sx={{ fontWeight: 700, color: '#6366f1' }}>{m.code}</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>{m.machine}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700, color: m.downtime > 0 ? '#ef4444' : '#10b981' }}>
+                        {m.downtime.toLocaleString()} mins
                       </TableCell>
-                      <TableCell align="right" sx={{ pr: 3, fontWeight: 700, color: item.availability > 95 ? '#10b981' : item.availability > 85 ? '#f59e0b' : '#ef4444' }}>
-                        {item.availability.toFixed(2)}%
+                      <TableCell align="right" sx={{ fontWeight: 700, color: m.availability >= 90 ? '#10b981' : '#f59e0b' }}>
+                        {m.availability.toFixed(1)}%
+                      </TableCell>
+                      <TableCell align="center">
+                        <Chip
+                          size="small"
+                          label={m.availability >= 90 ? 'HEALTHY' : (m.availability >= 75 ? 'MODERATE' : 'CRITICAL')}
+                          sx={{
+                            fontWeight: 700,
+                            bgcolor: m.availability >= 90 ? 'rgba(16, 185, 129, 0.1)' : (m.availability >= 75 ? 'rgba(245, 158, 11, 0.1)' : 'rgba(239, 68, 68, 0.1)'),
+                            color: m.availability >= 90 ? '#059669' : (m.availability >= 75 ? '#d97706' : '#dc2626'),
+                            fontSize: '0.675rem'
+                          }}
+                        />
                       </TableCell>
                     </TableRow>
                   ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
-                      <Typography color="text.secondary">No machines found for filters.</Typography>
-                    </TableCell>
-                  </TableRow>
                 )}
               </TableBody>
             </Table>

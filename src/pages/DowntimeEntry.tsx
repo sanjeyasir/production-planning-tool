@@ -41,6 +41,7 @@ import {
   CircularProgress,
   Snackbar,
   InputAdornment,
+  Chip
 } from '@mui/material';
 
 // Icons
@@ -118,7 +119,6 @@ export const DowntimeEntry: React.FC = () => {
       const startMinutes = startH * 60 + startM;
       let endMinutes = endH * 60 + endM;
 
-      // Handle overnight shift duration
       if (endMinutes < startMinutes) {
         endMinutes += 24 * 60;
       }
@@ -208,7 +208,6 @@ export const DowntimeEntry: React.FC = () => {
       const start = new Date(`${data.date}T${data.startTime}`);
       let end = new Date(`${data.date}T${data.endTime}`);
       
-      // If end time is before start time, it means overnight record
       if (end < start) {
         end.setDate(end.getDate() + 1);
       }
@@ -309,21 +308,20 @@ export const DowntimeEntry: React.FC = () => {
         userId,
         userName,
         'DELETE_DOWNTIME',
-        `Deleted downtime record ID ${record.id} for machine ${record.machineId}`,
+        `Deleted downtime event ID ${record.id}`,
         record,
         null
       );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['downtimeRecords', tenantId] });
-      setNotification({ open: true, message: 'Downtime record deleted!', severity: 'success' });
+      setNotification({ open: true, message: 'Downtime event removed!', severity: 'success' });
     },
     onError: (err: any) => {
-      setNotification({ open: true, message: `Failed to delete record: ${err.message}`, severity: 'error' });
+      setNotification({ open: true, message: `Failed to remove record: ${err.message}`, severity: 'error' });
     }
   });
 
-  // Export handlers
   const exportExcel = () => {
     const dataToExport = filteredLogs.map((r) => {
       const plantObj = plants.find((p) => p.id === r.plantId);
@@ -335,49 +333,47 @@ export const DowntimeEntry: React.FC = () => {
         'Machine Name': machObj?.machineName || 'N/A',
         Category: catObj?.name || 'N/A',
         Shift: r.shift,
-        Date: new Date(r.startTime).toLocaleDateString(),
-        'Start Time': new Date(r.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        'End Time': new Date(r.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        'Duration (Mins)': r.duration,
-        Reason: r.reason,
-        Remarks: r.remarks || '',
+        'Start Time': new Date(r.startTime).toLocaleString(),
+        'End Time': new Date(r.endTime).toLocaleString(),
+        'Duration (Minutes)': r.duration,
+        'Downtime Reason': r.reason,
+        'Remarks / Notes': r.remarks || 'None',
       };
     });
 
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Downtime Logs');
+    XLSX.utils.book_append_sheet(wb, ws, 'Downtime Incidents');
     XLSX.writeFile(wb, `Downtime_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const exportPDF = () => {
     const doc = new jsPDF();
-    doc.text(`MOIP - Downtime Operations Report (${tenant?.companyName})`, 14, 15);
+    doc.text(`MOIP - Machine Downtime Report (${tenant?.companyName})`, 14, 15);
     doc.setFontSize(9);
     doc.text(`Generated on ${new Date().toLocaleString()}`, 14, 22);
 
     const bodyRows = filteredLogs.map((r) => {
-      const plantObj = plants.find((p) => p.id === r.plantId);
       const machObj = machines.find((m) => m.id === r.machineId);
       const catObj = categories.find((c) => c.id === r.categoryId);
       return [
-        plantObj?.plantName || 'N/A',
-        `${machObj?.machineCode || 'N/A'} - ${machObj?.machineName || 'N/A'}`,
+        machObj?.machineCode || 'N/A',
         catObj?.name || 'N/A',
         r.shift,
         new Date(r.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        `${r.duration}m`,
+        new Date(r.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        `${r.duration} mins`,
         r.reason,
       ];
     });
 
     (doc as any).autoTable({
       startY: 28,
-      head: [['Plant', 'Machine', 'Category', 'Shift', 'Time', 'Dur.', 'Reason']],
+      head: [['Machine', 'Category', 'Shift', 'Start', 'End', 'Duration', 'Reason']],
       body: bodyRows,
       theme: 'grid',
       styles: { fontSize: 8 },
-      headStyles: { fillColor: [79, 70, 229] },
+      headStyles: { fillColor: [239, 68, 68] },
     });
 
     doc.save(`Downtime_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
@@ -386,7 +382,7 @@ export const DowntimeEntry: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.plantId || !formData.machineId || !formData.categoryId || !formData.reason) {
-      setNotification({ open: true, message: 'Please fill in all required fields.', severity: 'error' });
+      setNotification({ open: true, message: 'Please complete all required fields.', severity: 'error' });
       return;
     }
     createMutation.mutate(formData);
@@ -395,56 +391,50 @@ export const DowntimeEntry: React.FC = () => {
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editFormData.plantId || !editFormData.machineId || !editFormData.categoryId || !editFormData.reason) {
-      setNotification({ open: true, message: 'Please fill in all required fields.', severity: 'error' });
+      setNotification({ open: true, message: 'Please complete all required fields.', severity: 'error' });
       return;
     }
     updateMutation.mutate(editFormData);
   };
 
-  // Get active machines for selection dropdown based on selected plant
-  const formMachines = useMemo(() => {
-    return machines.filter((m) => m.plantId === formData.plantId && m.status === 'ACTIVE');
-  }, [machines, formData.plantId]);
-
-  const editFormMachines = useMemo(() => {
-    return machines.filter((m) => m.plantId === editFormData.plantId && m.status === 'ACTIVE');
-  }, [machines, editFormData.plantId]);
-
   const canEdit = hasPermission('downtime', 'update');
   const canDelete = hasPermission('downtime', 'delete');
 
   return (
-    <Box>
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 800, color: 'text.primary', mb: 0.5 }}>
-          Downtime Logs & Entry
+    <Box sx={{ py: 1 }}>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <PlaylistAddIcon sx={{ color: '#ef4444' }} />
+          Machine Downtime Entry & Log
         </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Log production stoppages, mechanical errors, or material delays instantly.
+        <Typography variant="body2" sx={{ color: '#64748b', mt: 0.3 }}>
+          Log machine breakdown incidents, maintenance delays, and shift occurrences directly.
         </Typography>
       </Box>
 
-      <Grid container spacing={4}>
-        {/* Left Side: Logging Form */}
+      <Grid container spacing={3}>
+        {/* Left Side: Entry Form */}
         {hasPermission('downtime', 'create') && (
           <Grid size={{ xs: 12, lg: 4 }}>
-            <Card sx={{ position: 'sticky', top: 90 }}>
-              <CardContent sx={{ p: 3 }}>
-                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 3, color: 'primary.light' }}>
-                  <PlaylistAddIcon />
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                    Log Stoppage Event
+            <Card sx={{ borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <CardContent sx={{ p: 2.5 }}>
+                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 2.5, color: '#ef4444' }}>
+                  <Box sx={{ p: 0.8, borderRadius: '8px', bgcolor: 'rgba(239, 68, 68, 0.1)', display: 'flex' }}>
+                    <AccessTimeIcon sx={{ fontSize: 20 }} />
+                  </Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                    Record Downtime Incident
                   </Typography>
                 </Stack>
-                
+
                 <form onSubmit={handleSubmit}>
-                  <Stack spacing={2.5}>
-                    <FormControl fullWidth size="medium" required>
+                  <Stack spacing={2}>
+                    <FormControl fullWidth size="small" required>
                       <InputLabel>Select Plant</InputLabel>
                       <Select
                         label="Select Plant"
                         value={formData.plantId}
-                        onChange={(e) => setFormData({ ...formData, plantId: e.target.value, machineId: '' })}
+                        onChange={(e) => setFormData({ ...formData, plantId: e.target.value })}
                       >
                         {plants.filter(p => p.status === 'ACTIVE').map((p) => (
                           <MenuItem key={p.id} value={p.id}>{p.plantName}</MenuItem>
@@ -452,23 +442,25 @@ export const DowntimeEntry: React.FC = () => {
                       </Select>
                     </FormControl>
 
-                    <FormControl fullWidth size="medium" required disabled={!formData.plantId}>
-                      <InputLabel>Select Machine</InputLabel>
+                    <FormControl fullWidth size="small" required>
+                      <InputLabel>Target Machine</InputLabel>
                       <Select
-                        label="Select Machine"
+                        label="Target Machine"
                         value={formData.machineId}
                         onChange={(e) => setFormData({ ...formData, machineId: e.target.value })}
                       >
-                        {formMachines.map((m) => (
-                          <MenuItem key={m.id} value={m.id}>{m.machineCode} - {m.machineName}</MenuItem>
-                        ))}
+                        {machines
+                          .filter(m => (!formData.plantId || m.plantId === formData.plantId) && m.status === 'ACTIVE')
+                          .map((m) => (
+                            <MenuItem key={m.id} value={m.id}>{m.machineCode} - {m.machineName}</MenuItem>
+                          ))}
                       </Select>
                     </FormControl>
 
-                    <FormControl fullWidth size="medium" required>
-                      <InputLabel>Downtime Category</InputLabel>
+                    <FormControl fullWidth size="small" required>
+                      <InputLabel>Downtime Reason Category</InputLabel>
                       <Select
-                        label="Downtime Category"
+                        label="Downtime Reason Category"
                         value={formData.categoryId}
                         onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
                       >
@@ -478,33 +470,40 @@ export const DowntimeEntry: React.FC = () => {
                       </Select>
                     </FormControl>
 
-                    <FormControl fullWidth size="medium">
-                      <InputLabel>Shift</InputLabel>
-                      <Select
-                        label="Shift"
-                        value={formData.shift}
-                        onChange={(e) => setFormData({ ...formData, shift: e.target.value })}
-                      >
-                        <MenuItem value="Shift A">Shift A</MenuItem>
-                        <MenuItem value="Shift B">Shift B</MenuItem>
-                        <MenuItem value="Shift C">Shift C</MenuItem>
-                      </Select>
-                    </FormControl>
+                    <Grid container spacing={1.5}>
+                      <Grid size={6}>
+                        <FormControl fullWidth size="small" required>
+                          <InputLabel>Shift</InputLabel>
+                          <Select
+                            label="Shift"
+                            value={formData.shift}
+                            onChange={(e) => setFormData({ ...formData, shift: e.target.value })}
+                          >
+                            <MenuItem value="Shift A">Shift A</MenuItem>
+                            <MenuItem value="Shift B">Shift B</MenuItem>
+                            <MenuItem value="Shift C">Shift C</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid size={6}>
+                        <TextField
+                          label="Incident Date"
+                          type="date"
+                          size="small"
+                          fullWidth
+                          slotProps={{ inputLabel: { shrink: true } }}
+                          value={formData.date}
+                          onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                        />
+                      </Grid>
+                    </Grid>
 
-                    <TextField
-                      label="Event Date"
-                      type="date"
-                      fullWidth
-                      slotProps={{ inputLabel: { shrink: true } }}
-                      value={formData.date}
-                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    />
-
-                    <Grid container spacing={2}>
+                    <Grid container spacing={1.5}>
                       <Grid size={6}>
                         <TextField
                           label="Start Time"
                           type="time"
+                          size="small"
                           fullWidth
                           slotProps={{ inputLabel: { shrink: true } }}
                           value={formData.startTime}
@@ -515,6 +514,7 @@ export const DowntimeEntry: React.FC = () => {
                         <TextField
                           label="End Time"
                           type="time"
+                          size="small"
                           fullWidth
                           slotProps={{ inputLabel: { shrink: true } }}
                           value={formData.endTime}
@@ -523,33 +523,29 @@ export const DowntimeEntry: React.FC = () => {
                       </Grid>
                     </Grid>
 
-                    <TextField
-                      label="Duration (minutes)"
-                      type="number"
-                      fullWidth
-                      disabled
-                      value={formData.duration}
-                      slotProps={{ input: { startAdornment: (
-                          <InputAdornment position="start">
-                            <AccessTimeIcon sx={{ color: 'text.disabled', fontSize: 18 }} />
-                          </InputAdornment>
-                        ) } }}
-                    />
+                    <Box sx={{ p: 1.5, borderRadius: '10px', bgcolor: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>Total Duration:</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 800, color: '#ef4444' }}>{formData.duration} Minutes</Typography>
+                    </Box>
 
                     <TextField
-                      label="Reason for Stoppage"
+                      label="Root Cause / Stoppage Reason"
+                      placeholder="e.g. Needle jam in feeder assembly"
                       required
                       multiline
                       rows={2}
+                      size="small"
                       fullWidth
                       value={formData.reason}
                       onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                     />
 
                     <TextField
-                      label="Remarks (Optional)"
+                      label="Corrective Action / Remarks"
+                      placeholder="e.g. Technician replaced assembly unit"
                       multiline
                       rows={2}
+                      size="small"
                       fullWidth
                       value={formData.remarks}
                       onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
@@ -558,12 +554,13 @@ export const DowntimeEntry: React.FC = () => {
                     <Button
                       type="submit"
                       variant="contained"
-                      size="large"
+                      color="error"
+                      size="medium"
                       fullWidth
                       disabled={createMutation.isPending}
-                      sx={{ py: 1.5 }}
+                      sx={{ py: 1.2, fontWeight: 700, borderRadius: '8px' }}
                     >
-                      {createMutation.isPending ? <CircularProgress size={24} /> : 'Submit Downtime Entry'}
+                      {createMutation.isPending ? <CircularProgress size={22} color="inherit" /> : 'Log Stoppage Event'}
                     </Button>
                   </Stack>
                 </form>
@@ -572,23 +569,24 @@ export const DowntimeEntry: React.FC = () => {
           </Grid>
         )}
 
-        {/* Right Side: Logs Table / List */}
+        {/* Right Side: Log Entries Table */}
         <Grid size={{ xs: 12, lg: hasPermission('downtime', 'create') ? 8 : 12 }}>
-          <Card>
-            <CardContent sx={{ px: 0 }}>
-              <Box sx={{ px: 3, pb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', color: 'primary.light' }}>
-                  <HistoryIcon />
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                    Operational Downtime Logs
+          <Card sx={{ borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <CardContent sx={{ p: 2.5 }}>
+              <Box sx={{ pb: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <HistoryIcon sx={{ color: '#ef4444' }} />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                    Downtime Incident History
                   </Typography>
                 </Stack>
-                <Stack direction="row" spacing={1.5}>
+                <Stack direction="row" spacing={1}>
                   <Button
                     variant="outlined"
                     startIcon={<FileDownloadIcon />}
                     size="small"
                     onClick={exportExcel}
+                    sx={{ borderRadius: '8px', fontWeight: 600, fontSize: '0.8rem' }}
                   >
                     Excel
                   </Button>
@@ -597,27 +595,28 @@ export const DowntimeEntry: React.FC = () => {
                     startIcon={<FileDownloadIcon />}
                     size="small"
                     onClick={exportPDF}
+                    sx={{ borderRadius: '8px', fontWeight: 600, fontSize: '0.8rem' }}
                   >
                     PDF
                   </Button>
                 </Stack>
               </Box>
 
-              {/* Table Search & Local Filter */}
-              <Box sx={{ px: 3, pb: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              {/* Table Search & Filter */}
+              <Box sx={{ pb: 2, display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
                 <TextField
-                  placeholder="Search by Machine code or Reason..."
+                  placeholder="Search Machine / Reason..."
                   size="small"
-                  sx={{ width: { xs: '100%', sm: 300 } }}
+                  sx={{ width: { xs: '100%', sm: 260 } }}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   slotProps={{ input: { startAdornment: (
                       <InputAdornment position="start">
-                        <SearchIcon sx={{ color: 'text.disabled' }} />
+                        <SearchIcon sx={{ color: '#94a3b8', fontSize: 20 }} />
                       </InputAdornment>
                     ) } }}
                 />
-                <FormControl size="small" sx={{ width: 180 }}>
+                <FormControl size="small" sx={{ width: { xs: '100%', sm: 180 } }}>
                   <InputLabel>Filter by Plant</InputLabel>
                   <Select
                     label="Filter by Plant"
@@ -632,16 +631,16 @@ export const DowntimeEntry: React.FC = () => {
                 </FormControl>
               </Box>
 
-              <TableContainer sx={{ maxHeight: 600 }}>
-                <Table stickyHeader>
+              <TableContainer sx={{ maxHeight: 540, border: '1px solid #e2e8f0', borderRadius: '10px' }}>
+                <Table stickyHeader size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ pl: 3 }}>Date & Shift</TableCell>
-                      <TableCell>Machine</TableCell>
+                      <TableCell>Machine & Shift</TableCell>
                       <TableCell>Category</TableCell>
-                      <TableCell align="center">Duration</TableCell>
-                      <TableCell>Reason</TableCell>
-                      {(canEdit || canDelete) && <TableCell align="right" sx={{ pr: 3 }}>Actions</TableCell>}
+                      <TableCell>Time Window</TableCell>
+                      <TableCell align="right">Duration</TableCell>
+                      <TableCell>Reason & Remarks</TableCell>
+                      {(canEdit || canDelete) && <TableCell align="right">Actions</TableCell>}
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -651,42 +650,55 @@ export const DowntimeEntry: React.FC = () => {
                         const catObj = categories.find((c) => c.id === r.categoryId);
                         return (
                           <TableRow key={r.id} hover>
-                            <TableCell sx={{ pl: 3 }}>
-                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                {new Date(r.startTime).toLocaleDateString()}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {r.shift}
-                              </Typography>
-                            </TableCell>
                             <TableCell>
-                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#6366f1' }}>
                                 {machObj?.machineCode || 'N/A'}
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
-                                {machObj?.machineName || 'N/A'}
+                                {machObj?.machineName || 'N/A'} • {r.shift}
                               </Typography>
                             </TableCell>
-                            <TableCell>{catObj?.name || 'N/A'}</TableCell>
-                            <TableCell align="center" sx={{ color: 'error.main', fontWeight: 700 }}>
+                            <TableCell>
+                              <Chip
+                                size="small"
+                                label={catObj?.name || 'Uncategorized'}
+                                sx={{ bgcolor: 'rgba(99, 102, 241, 0.08)', color: '#4f46e5', fontWeight: 600, fontSize: '0.7rem' }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
+                                {new Date(r.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(r.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {new Date(r.startTime).toLocaleDateString()}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 800, color: '#ef4444' }}>
                               {r.duration}m
                             </TableCell>
-                            <TableCell sx={{ maxWidth: 200, wordWrap: 'break-word' }}>
-                              {r.reason}
+                            <TableCell sx={{ maxWidth: 220 }}>
+                              <Typography variant="body2" noWrap sx={{ fontWeight: 600, color: '#0f172a' }}>
+                                {r.reason}
+                              </Typography>
+                              {r.remarks && (
+                                <Typography variant="caption" noWrap sx={{ color: '#64748b', display: 'block' }}>
+                                  {r.remarks}
+                                </Typography>
+                              )}
                             </TableCell>
                             {(canEdit || canDelete) && (
-                              <TableCell align="right" sx={{ pr: 3 }}>
-                                <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
+                              <TableCell align="right">
+                                <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
                                   {canEdit && (
-                                    <Tooltip title="Edit Record">
-                                      <IconButton onClick={() => setEditRecord(r)} size="small" color="primary">
+                                    <Tooltip title="Edit Incident">
+                                      <IconButton onClick={() => setEditRecord(r)} size="small" sx={{ color: '#6366f1' }}>
                                         <EditIcon fontSize="small" />
                                       </IconButton>
                                     </Tooltip>
                                   )}
                                   {canDelete && (
-                                    <Tooltip title="Delete Record">
-                                      <IconButton onClick={() => { if(confirm('Are you sure you want to delete this log?')) deleteMutation.mutate(r); }} size="small" color="error">
+                                    <Tooltip title="Delete Incident">
+                                      <IconButton onClick={() => { if (confirm('Are you sure you want to delete this downtime entry?')) deleteMutation.mutate(r); }} size="small" sx={{ color: '#ef4444' }}>
                                         <DeleteIcon fontSize="small" />
                                       </IconButton>
                                     </Tooltip>
@@ -699,11 +711,11 @@ export const DowntimeEntry: React.FC = () => {
                       })
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
+                        <TableCell colSpan={6} align="center" sx={{ py: 6, color: '#64748b' }}>
                           {loadingRecords ? (
-                            <CircularProgress color="primary" />
+                            <CircularProgress size={30} />
                           ) : (
-                            <Typography color="text.secondary">No downtime logs found.</Typography>
+                            'No downtime events logged.'
                           )}
                         </TableCell>
                       </TableRow>
@@ -717,17 +729,33 @@ export const DowntimeEntry: React.FC = () => {
       </Grid>
 
       {/* Edit Dialog */}
-      <Dialog open={Boolean(editRecord)} onClose={() => setEditRecord(null)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>Edit Downtime Event</DialogTitle>
+      <Dialog
+        open={Boolean(editRecord)}
+        onClose={() => setEditRecord(null)}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              p: 1
+            }
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: '#0f172a', pb: 1 }}>
+          Edit Downtime Record
+        </DialogTitle>
         <form onSubmit={handleEditSubmit}>
-          <DialogContent>
-            <Stack spacing={2.5} sx={{ mt: 1 }}>
-              <FormControl fullWidth required>
+          <DialogContent sx={{ pt: 1 }}>
+            <Stack spacing={2.5}>
+              <FormControl fullWidth size="small" required>
                 <InputLabel>Plant</InputLabel>
                 <Select
                   label="Plant"
                   value={editFormData.plantId}
-                  onChange={(e) => setEditFormData({ ...editFormData, plantId: e.target.value, machineId: '' })}
+                  onChange={(e) => setEditFormData({ ...editFormData, plantId: e.target.value })}
                 >
                   {plants.filter(p => p.status === 'ACTIVE').map((p) => (
                     <MenuItem key={p.id} value={p.id}>{p.plantName}</MenuItem>
@@ -735,20 +763,22 @@ export const DowntimeEntry: React.FC = () => {
                 </Select>
               </FormControl>
 
-              <FormControl fullWidth required disabled={!editFormData.plantId}>
+              <FormControl fullWidth size="small" required>
                 <InputLabel>Machine</InputLabel>
                 <Select
                   label="Machine"
                   value={editFormData.machineId}
                   onChange={(e) => setEditFormData({ ...editFormData, machineId: e.target.value })}
                 >
-                  {editFormMachines.map((m) => (
-                    <MenuItem key={m.id} value={m.id}>{m.machineCode} - {m.machineName}</MenuItem>
-                  ))}
+                  {machines
+                    .filter(m => (!editFormData.plantId || m.plantId === editFormData.plantId) && m.status === 'ACTIVE')
+                    .map((m) => (
+                      <MenuItem key={m.id} value={m.id}>{m.machineCode} - {m.machineName}</MenuItem>
+                    ))}
                 </Select>
               </FormControl>
 
-              <FormControl fullWidth required>
+              <FormControl fullWidth size="small" required>
                 <InputLabel>Category</InputLabel>
                 <Select
                   label="Category"
@@ -761,33 +791,40 @@ export const DowntimeEntry: React.FC = () => {
                 </Select>
               </FormControl>
 
-              <FormControl fullWidth>
-                <InputLabel>Shift</InputLabel>
-                <Select
-                  label="Shift"
-                  value={editFormData.shift}
-                  onChange={(e) => setEditFormData({ ...editFormData, shift: e.target.value })}
-                >
-                  <MenuItem value="Shift A">Shift A</MenuItem>
-                  <MenuItem value="Shift B">Shift B</MenuItem>
-                  <MenuItem value="Shift C">Shift C</MenuItem>
-                </Select>
-              </FormControl>
-
-              <TextField
-                label="Event Date"
-                type="date"
-                fullWidth
-                slotProps={{ inputLabel: { shrink: true } }}
-                value={editFormData.date}
-                onChange={(e) => setEditFormData({ ...editFormData, date: e.target.value })}
-              />
+              <Grid container spacing={2}>
+                <Grid size={6}>
+                  <FormControl fullWidth size="small" required>
+                    <InputLabel>Shift</InputLabel>
+                    <Select
+                      label="Shift"
+                      value={editFormData.shift}
+                      onChange={(e) => setEditFormData({ ...editFormData, shift: e.target.value })}
+                    >
+                      <MenuItem value="Shift A">Shift A</MenuItem>
+                      <MenuItem value="Shift B">Shift B</MenuItem>
+                      <MenuItem value="Shift C">Shift C</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid size={6}>
+                  <TextField
+                    label="Date"
+                    type="date"
+                    size="small"
+                    fullWidth
+                    slotProps={{ inputLabel: { shrink: true } }}
+                    value={editFormData.date}
+                    onChange={(e) => setEditFormData({ ...editFormData, date: e.target.value })}
+                  />
+                </Grid>
+              </Grid>
 
               <Grid container spacing={2}>
                 <Grid size={6}>
                   <TextField
                     label="Start Time"
                     type="time"
+                    size="small"
                     fullWidth
                     slotProps={{ inputLabel: { shrink: true } }}
                     value={editFormData.startTime}
@@ -798,6 +835,7 @@ export const DowntimeEntry: React.FC = () => {
                   <TextField
                     label="End Time"
                     type="time"
+                    size="small"
                     fullWidth
                     slotProps={{ inputLabel: { shrink: true } }}
                     value={editFormData.endTime}
@@ -806,19 +844,18 @@ export const DowntimeEntry: React.FC = () => {
                 </Grid>
               </Grid>
 
-              <TextField
-                label="Duration (minutes)"
-                type="number"
-                fullWidth
-                disabled
-                value={editFormData.duration}
-              />
+              <Box sx={{ p: 1.5, borderRadius: '8px', bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                <Typography variant="body2" sx={{ fontWeight: 700, color: '#ef4444' }}>
+                  Calculated Duration: {editFormData.duration} Minutes
+                </Typography>
+              </Box>
 
               <TextField
-                label="Reason"
+                label="Root Cause Reason"
                 required
                 multiline
                 rows={2}
+                size="small"
                 fullWidth
                 value={editFormData.reason}
                 onChange={(e) => setEditFormData({ ...editFormData, reason: e.target.value })}
@@ -828,17 +865,18 @@ export const DowntimeEntry: React.FC = () => {
                 label="Remarks"
                 multiline
                 rows={2}
+                size="small"
                 fullWidth
                 value={editFormData.remarks}
                 onChange={(e) => setEditFormData({ ...editFormData, remarks: e.target.value })}
               />
             </Stack>
           </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={() => setEditRecord(null)} color="inherit">
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setEditRecord(null)} variant="outlined" sx={{ borderRadius: '8px' }}>
               Cancel
             </Button>
-            <Button type="submit" variant="contained" disabled={updateMutation.isPending}>
+            <Button type="submit" variant="contained" color="error" disabled={updateMutation.isPending} sx={{ borderRadius: '8px', fontWeight: 700 }}>
               Save Changes
             </Button>
           </DialogActions>
@@ -850,7 +888,7 @@ export const DowntimeEntry: React.FC = () => {
         autoHideDuration={4000}
         onClose={() => setNotification((n) => ({ ...n, open: false }))}
       >
-        <Alert severity={notification.severity} variant="filled" sx={{ width: '100%' }}>
+        <Alert severity={notification.severity} variant="filled" sx={{ width: '100%', borderRadius: '10px' }}>
           {notification.message}
         </Alert>
       </Snackbar>

@@ -87,35 +87,42 @@ import PublishIcon from '@mui/icons-material/Publish';
 import UndoIcon from '@mui/icons-material/Undo';
 import BlockIcon from '@mui/icons-material/Block';
 import InfoIcon from '@mui/icons-material/Info';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 import * as XLSX from 'xlsx';
 
-// Theme colors matching the existing application
-const PLAN_COLORS: Record<string, { bg: string; border: string; text: string }> = {
+// Color definitions for visual planner timeline matching costing-sample-tracking
+const PLAN_COLORS: Record<string, { bg: string; border: string; text: string; label: string }> = {
   CONFIRMED: {
     bg: 'rgba(16, 185, 129, 0.12)',
     border: '1px solid #10b981',
-    text: '#10b981'
+    text: '#065f46',
+    label: 'Live Confirmed'
   },
   SIMULATED: {
-    bg: 'rgba(245, 158, 11, 0.08)',
+    bg: 'rgba(245, 158, 11, 0.12)',
     border: '1px dashed #f59e0b',
-    text: '#f59e0b'
+    text: '#92400e',
+    label: 'Simulation Draft'
   },
   DOWNTIME: {
     bg: 'rgba(239, 68, 68, 0.12)',
     border: '1px solid #ef4444',
-    text: '#ef4444'
+    text: '#991b1b',
+    label: 'Line Downtime'
   },
   HOLIDAY: {
     bg: 'rgba(168, 85, 247, 0.12)',
     border: '1px solid #a855f7',
-    text: '#a855f7'
+    text: '#6b21a8',
+    label: 'Factory Holiday'
   }
 };
 
 // Format Date cleanly
 const parseDate = (d: any): Date => {
+  if (!d) return new Date();
   if (d instanceof Date) return d;
   if (d?.toDate) return d.toDate();
   return new Date(d);
@@ -251,8 +258,6 @@ export const ProductionPlanning: React.FC = () => {
 
   const [hourlyLogsForm, setHourlyLogsForm] = useState<{ [hour: number]: number }>({});
 
-  // Queries moved to top of component to ensure correct hook ordering
-
   // ----------------------------------------------------
   // MUTATIONS
   // ----------------------------------------------------
@@ -275,7 +280,7 @@ export const ProductionPlanning: React.FC = () => {
         priority: 'MEDIUM'
       });
     },
-    onError: (err) => showToast('Error creating order: ' + err.message, 'error')
+    onError: (err: any) => showToast('Error creating order: ' + err.message, 'error')
   });
 
   const updateOrderMutation = useMutation({
@@ -302,13 +307,12 @@ export const ProductionPlanning: React.FC = () => {
       setIsScheduleDialogOpen(false);
       showToast(`Job successfully scheduled as ${variables.type}!`);
 
-      // Update order status to SCHEDULED
       updateOrderMutation.mutate({
         id: variables.orderId,
         data: { status: 'SCHEDULED' }
       });
     },
-    onError: (err) => showToast('Error scheduling plan: ' + err.message, 'error')
+    onError: (err: any) => showToast('Error scheduling plan: ' + err.message, 'error')
   });
 
   const deletePlanMutation = useMutation({
@@ -318,10 +322,8 @@ export const ProductionPlanning: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['productionOrders', tenantId] });
       showToast('Scheduled job deleted.');
 
-      // Find the plan that was deleted
       const plan = plans.find(p => p.id === deletedPlanId);
       if (plan) {
-        // Revert order status back to PENDING if no other plans exist for this order
         const otherPlans = plans.filter(p => p.orderId === plan.orderId && p.id !== deletedPlanId);
         if (otherPlans.length === 0) {
           updateOrderMutation.mutate({
@@ -362,12 +364,10 @@ export const ProductionPlanning: React.FC = () => {
       const plan = plans.find(p => p.id === planId);
       if (!plan) throw new Error('Plan not found');
 
-      // Save logs one by one
       for (const hourStr of Object.keys(logs)) {
         const hour = Number(hourStr);
         const actual = logs[hour];
 
-        // Find existing record
         const existing = hourlyLogs.find(
           l => l.planId === planId && l.hour === hour
         );
@@ -391,12 +391,11 @@ export const ProductionPlanning: React.FC = () => {
       setIsHourlyLogOpen(false);
       showToast('Hourly production output saved!');
     },
-    onError: (err) => showToast('Error saving hourly logs: ' + err.message, 'error')
+    onError: (err: any) => showToast('Error saving hourly logs: ' + err.message, 'error')
   });
 
   const seedDemoDataMutation = useMutation({
     mutationFn: async () => {
-      // 1. Create 3 demo orders
       const order1Id = await createProductionOrder({
         tenantId,
         orderNumber: 'ORD-101',
@@ -430,7 +429,6 @@ export const ProductionPlanning: React.FC = () => {
         priority: 'LOW'
       });
 
-      // 2. Create 1 holiday (tomorrow)
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       tomorrow.setHours(0, 0, 0, 0);
@@ -440,10 +438,8 @@ export const ProductionPlanning: React.FC = () => {
         name: 'National Manufacturing Day'
       });
 
-      // 3. Create 2 plans (one confirmed, one simulated)
       if (activeMachines.length > 0) {
         const m1 = activeMachines[0];
-        // Confirmed Plan for ORD-101 on machine 1 starting today at 08:00
         const start1 = new Date();
         start1.setHours(8, 0, 0, 0);
         const duration1 = Math.ceil(3500 / m1.capacity);
@@ -459,7 +455,6 @@ export const ProductionPlanning: React.FC = () => {
           plannedHourlyRate: m1.capacity
         });
 
-        // Seed some hourly actuals for plan 1
         for (let h = 8; h < 8 + Math.min(6, duration1); h++) {
           await createHourlyProduction({
             tenantId,
@@ -474,7 +469,6 @@ export const ProductionPlanning: React.FC = () => {
 
       if (activeMachines.length > 1) {
         const m2 = activeMachines[1];
-        // Simulated Plan for ORD-102 on machine 2 starting today at 10:00
         const start2 = new Date();
         start2.setHours(10, 0, 0, 0);
         const duration2 = Math.ceil(1800 / m2.capacity);
@@ -498,14 +492,8 @@ export const ProductionPlanning: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['hourlyProductions', tenantId] });
       showToast('Demo production planning data successfully loaded!');
     },
-    onError: (err) => showToast('Error seeding demo data: ' + err.message, 'error')
+    onError: (err: any) => showToast('Error seeding demo data: ' + err.message, 'error')
   });
-
-  // ----------------------------------------------------
-  // LOGIC & UTILITIES
-  // ----------------------------------------------------
-
-  // parseDate utility moved outside component to prevent hoisting/initialization errors
 
   const getMachineName = (id: string) => {
     const mach = machines.find(m => m.id === id);
@@ -523,7 +511,6 @@ export const ProductionPlanning: React.FC = () => {
     const start = new Date(startDateStr);
     const end = new Date(endDateStr);
     
-    // limit to max 31 days to prevent browser hanging on large ranges
     const limitDate = new Date(start);
     limitDate.setDate(limitDate.getDate() + 31);
     const actualEnd = end > limitDate ? limitDate : end;
@@ -541,15 +528,12 @@ export const ProductionPlanning: React.FC = () => {
       return { adjustedPlans: [], timelineCells: {}, conflicts: [] };
     }
 
-    // 1. Get plans for the selected machine
-    // Exclude simulated plans if not in what-if mode
     const machinePlans = plans.filter((p) => {
       if (p.machineId !== selectedMachineId) return false;
       if (!isWhatIfMode && p.type === 'SIMULATED') return false;
       return true;
     });
 
-    // 2. Sort plans by scheduled startTime, and tie-break by priority
     const priorityWeight: Record<string, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 };
     const sortedMachinePlans = [...machinePlans].sort((a, b) => {
       const startA = parseDate(a.startTime).getTime();
@@ -561,10 +545,9 @@ export const ProductionPlanning: React.FC = () => {
       const ordB = orders.find((o) => o.id === b.orderId);
       const wA = priorityWeight[ordA?.priority || 'MEDIUM'] || 2;
       const wB = priorityWeight[ordB?.priority || 'MEDIUM'] || 2;
-      return wB - wA; // High priority first
+      return wB - wA;
     });
 
-    // 3. Chain and calculate adjusted start/end times
     interface AdjustedPlan {
       plan: ProductionPlan;
       adjustedStartTime: Date;
@@ -575,7 +558,6 @@ export const ProductionPlanning: React.FC = () => {
     const adjustedPlans: AdjustedPlan[] = [];
     let previousEndTime: Date | null = null;
 
-    // Helper functions for checking downtime and holidays
     const isHolidayAtTime = (date: Date): { name: string } | null => {
       const dStr = date.toISOString().split('T')[0];
       const match = holidays.find((h) => {
@@ -600,40 +582,32 @@ export const ProductionPlanning: React.FC = () => {
       if (!order) continue;
 
       const schedStart = parseDate(plan.startTime);
-      // Adjusted start time is max of scheduled start time and previous plan's adjusted end time
       let adjustedStart = schedStart;
       if (previousEndTime && previousEndTime > adjustedStart) {
         adjustedStart = new Date(previousEndTime);
       }
 
-      // Calculate runtime
       const totalQuantity = order.quantity;
       const hourlyRate = Math.max(1, plan.plannedHourlyRate || 1);
       
       let accumulated = 0;
-      let timeCursor = new Date(adjustedStart);
-      // Align cursor to the start of the hour
+      const timeCursor = new Date(adjustedStart);
       timeCursor.setMinutes(0, 0, 0);
 
-      // Loop hour-by-hour until totalQuantity is produced
       let safetyCounter = 0;
       while (accumulated < totalQuantity && safetyCounter < 1000) {
         safetyCounter++;
-        // Check if cursor hour is holiday or downtime
         const hol = isHolidayAtTime(timeCursor);
         const dt = isDowntimeAtTime(timeCursor);
 
         if (hol || dt) {
-          // No production, slide forward by 1 hour
           timeCursor.setHours(timeCursor.getHours() + 1);
           continue;
         }
 
-        // If valid production hour, determine production volume
         const hourVal = timeCursor.getHours();
         const dateStr = timeCursor.toISOString().split('T')[0];
         
-        // Find if actual log exists for this plan, date, and hour
         const log = hourlyLogs.find((l) => {
           if (l.planId !== plan.id) return false;
           if (l.hour !== hourVal) return false;
@@ -644,7 +618,6 @@ export const ProductionPlanning: React.FC = () => {
         if (log) {
           accumulated += log.actual;
         } else {
-          // If in the past/future and no log, we assume capacity was produced.
           accumulated += hourlyRate;
         }
 
@@ -662,7 +635,6 @@ export const ProductionPlanning: React.FC = () => {
       previousEndTime = adjustedEnd;
     }
 
-    // 4. Construct 2D grid cells [dayStr][hour]
     interface TimelineCell {
       type: 'FREE' | 'CONFIRMED' | 'SIMULATED' | 'DOWNTIME' | 'HOLIDAY';
       label?: string;
@@ -673,7 +645,6 @@ export const ProductionPlanning: React.FC = () => {
 
     const cells: Record<string, Record<number, TimelineCell>> = {};
 
-    // Initialize all slots
     for (const dayStr of dateRangeDays) {
       cells[dayStr] = {};
       const dayDate = new Date(dayStr);
@@ -683,7 +654,6 @@ export const ProductionPlanning: React.FC = () => {
         const cellTime = new Date(dayDate);
         cellTime.setHours(h, 0, 0, 0);
 
-        // A. Check Holiday
         const hol = isHolidayAtTime(cellTime);
         if (hol) {
           cells[dayStr][h] = {
@@ -694,7 +664,6 @@ export const ProductionPlanning: React.FC = () => {
           continue;
         }
 
-        // B. Check Downtime
         const dt = isDowntimeAtTime(cellTime);
         if (dt) {
           cells[dayStr][h] = {
@@ -706,7 +675,6 @@ export const ProductionPlanning: React.FC = () => {
           continue;
         }
 
-        // C. Check if any adjusted plan falls into this hour
         const activePlan = adjustedPlans.find((ap) => {
           return cellTime >= ap.adjustedStartTime && cellTime < ap.adjustedEndTime;
         });
@@ -722,12 +690,10 @@ export const ProductionPlanning: React.FC = () => {
           continue;
         }
 
-        // Default FREE
         cells[dayStr][h] = { type: 'FREE' };
       }
     }
 
-    // 5. Gather conflicts
     const conflicts: string[] = [];
     for (const ap of adjustedPlans) {
       const ord = orders.find((o) => o.id === ap.plan.orderId);
@@ -735,7 +701,7 @@ export const ProductionPlanning: React.FC = () => {
         const dueDate = parseDate(ord.dueDate);
         if (ap.adjustedEndTime > dueDate) {
           conflicts.push(
-            `Order ${ord.orderNumber} is projected to finish late! Adjusted End Time: ${ap.adjustedEndTime.toLocaleString()} | Due Date: ${dueDate.toLocaleDateString()}`
+            `Order ${ord.orderNumber} is projected to finish late! Adjusted End: ${ap.adjustedEndTime.toLocaleDateString()} ${ap.adjustedEndTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} | Due Date: ${dueDate.toLocaleDateString()}`
           );
         }
       }
@@ -751,7 +717,6 @@ export const ProductionPlanning: React.FC = () => {
   const timelineCells = adjustedTimelineData.timelineCells;
   const schedulingConflicts = adjustedTimelineData.conflicts;
 
-  // Number of simulated jobs in the sandbox
   const simulatedJobsCount = useMemo(() => {
     return plans.filter(p => p.type === 'SIMULATED').length;
   }, [plans]);
@@ -799,13 +764,13 @@ export const ProductionPlanning: React.FC = () => {
     if (!cell.plan) return;
     const action = window.confirm(
       `Manage Scheduled Run for ${cell.label}:\n\n` +
-      `[OK] -> Log Production Volumes (Hourly Performance Logs).\n` +
-      `[Cancel] -> Cancel / Delete Scheduled Run.`
+      `[OK] -> Log Hourly Production Volumes.\n` +
+      `[Cancel] -> Delete / Cancel Scheduled Run.`
     );
     if (action) {
       handleOpenHourlyLog(cell.plan);
     } else {
-      if (window.confirm(`Are you sure you want to delete/cancel the scheduled plan for ${cell.label}?`)) {
+      if (window.confirm(`Are you sure you want to delete the scheduled plan for ${cell.label}?`)) {
         deletePlanMutation.mutate(cell.plan.id);
       }
     }
@@ -822,8 +787,6 @@ export const ProductionPlanning: React.FC = () => {
       return;
     }
 
-    // Auto-calculate duration based on machine capacity
-    // duration (hours) = Quantity / Capacity
     const durationHours = Math.ceil(orderObj.quantity / machObj.capacity);
 
     const start = new Date(scheduleForm.startDateStr);
@@ -841,7 +804,6 @@ export const ProductionPlanning: React.FC = () => {
     });
   };
 
-  // Promotes all simulated jobs to confirmed
   const handlePromoteSimulation = () => {
     const simulated = plans.filter(p => p.type === 'SIMULATED');
     if (simulated.length === 0) {
@@ -855,7 +817,6 @@ export const ProductionPlanning: React.FC = () => {
     showToast(`Successfully promoted ${simulated.length} sandbox jobs to Confirmed Live Plan!`);
   };
 
-  // Clear simulated plans
   const handleClearSimulation = () => {
     const simulated = plans.filter(p => p.type === 'SIMULATED');
     simulated.forEach((p) => {
@@ -864,14 +825,12 @@ export const ProductionPlanning: React.FC = () => {
     showToast('Simulated schedule drafts cleared.');
   };
 
-  // Open Log Hourly Output modal
   const handleOpenHourlyLog = (plan: ProductionPlan) => {
     setSelectedPlan(plan);
     const initialLogs: { [h: number]: number } = {};
     const planStart = parseDate(plan.startTime);
     const planEnd = parseDate(plan.endTime);
 
-    // Calculate total hours
     const durationHours = Math.ceil(
       (planEnd.getTime() - planStart.getTime()) / (1000 * 60 * 60)
     );
@@ -879,7 +838,6 @@ export const ProductionPlanning: React.FC = () => {
     for (let i = 0; i < durationHours; i++) {
       const logHour = new Date(planStart.getTime() + i * 60 * 60 * 1000);
       const hourVal = logHour.getHours();
-      // Look up existing logged actual
       const logObj = hourlyLogs.find(
         l => l.planId === plan.id && l.hour === hourVal
       );
@@ -901,11 +859,7 @@ export const ProductionPlanning: React.FC = () => {
     });
   };
 
-  // ----------------------------------------------------
-  // EXCEL REPORT EXPORT
-  // ----------------------------------------------------
   const handleExcelExport = () => {
-    // 1. Prepare Orders Sheet
     const ordersData = orders.map(o => ({
       'Order Number': o.orderNumber,
       'Product Name': o.productName,
@@ -916,7 +870,6 @@ export const ProductionPlanning: React.FC = () => {
       'Created At': parseDate(o.createdAt).toISOString().split('T')[0],
     }));
 
-    // 2. Prepare Scheduled Plans Sheet
     const plansData = plans.map(p => {
       const start = parseDate(p.startTime);
       const end = parseDate(p.endTime);
@@ -932,7 +885,6 @@ export const ProductionPlanning: React.FC = () => {
       };
     });
 
-    // 3. Prepare Hourly Production Performance Sheet
     const hourlyData = hourlyLogs.map(l => {
       const planObj = plans.find(p => p.id === l.planId);
       const orderObj = planObj ? orders.find(o => o.id === planObj.orderId) : null;
@@ -949,25 +901,18 @@ export const ProductionPlanning: React.FC = () => {
       };
     });
 
-    // Write sheets
     const wb = XLSX.utils.book_new();
-
     const wsOrders = XLSX.utils.json_to_sheet(ordersData);
     XLSX.utils.book_append_sheet(wb, wsOrders, 'Production Orders');
-
     const wsPlans = XLSX.utils.json_to_sheet(plansData);
     XLSX.utils.book_append_sheet(wb, wsPlans, 'Schedules & Plans');
-
     const wsHourly = XLSX.utils.json_to_sheet(hourlyData);
     XLSX.utils.book_append_sheet(wb, wsHourly, 'Hourly Performance Logs');
 
-    XLSX.writeFile(wb, `MOIP_Production_Planning_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(wb, `MOIP_Production_Planning_${new Date().toISOString().slice(0, 10)}.xlsx`);
     showToast('Excel report downloaded successfully!');
   };
 
-  // ----------------------------------------------------
-  // HOLIDAYS MANAGEMENT HANDLERS
-  // ----------------------------------------------------
   const [holidayForm, setHolidayForm] = useState({
     dateStr: new Date().toISOString().split('T')[0],
     name: ''
@@ -980,7 +925,6 @@ export const ProductionPlanning: React.FC = () => {
       return;
     }
 
-    // Check if already registered
     const hDate = new Date(holidayForm.dateStr);
     hDate.setHours(0, 0, 0, 0);
     const existing = holidays.find(h => {
@@ -1011,8 +955,8 @@ export const ProductionPlanning: React.FC = () => {
   const orderStatusData = useMemo(() => {
     const counts = { PENDING: 0, SCHEDULED: 0, COMPLETED: 0 };
     orders.forEach(o => {
-      if (counts[o.status] !== undefined) {
-        counts[o.status]++;
+      if (counts[o.status as keyof typeof counts] !== undefined) {
+        counts[o.status as keyof typeof counts]++;
       }
     });
     return [
@@ -1022,12 +966,9 @@ export const ProductionPlanning: React.FC = () => {
     ].filter(item => item.value > 0);
   }, [orders]);
 
-  // Compute machine utilization rates
   const machineUtilization = useMemo(() => {
-    // Scheduled hours vs available hours in a 30 day window
-    const totalHoursWindow = 30 * 24; // 720 hours
+    const totalHoursWindow = 30 * 24;
     return activeMachines.map((m) => {
-      // Find plans on this machine
       const mPlans = plans.filter(p => p.machineId === m.id);
       let scheduledHours = 0;
       mPlans.forEach((p) => {
@@ -1037,7 +978,6 @@ export const ProductionPlanning: React.FC = () => {
         scheduledHours += diffMs / (1000 * 60 * 60);
       });
 
-      // Find downtime hours on this machine
       const mDowntimes = downtimeRecords.filter(dt => dt.machineId === m.id);
       let downtimeHours = 0;
       mDowntimes.forEach((dt) => {
@@ -1057,14 +997,12 @@ export const ProductionPlanning: React.FC = () => {
     });
   }, [activeMachines, plans, downtimeRecords]);
 
-  // Selected schedule performance data
   const [performancePlanId, setPerformancePlanId] = useState<string>('all');
   const performanceChartData = useMemo(() => {
     const selectedLogs = hourlyLogs.filter(
       l => performancePlanId === 'all' || l.planId === performancePlanId
     );
 
-    // Group logs by hour
     const hourlyGroups: { [hour: number]: { hourLabel: string; Budget: number; Actual: number } } = {};
     for (let h = 0; h < 24; h++) {
       hourlyGroups[h] = {
@@ -1082,70 +1020,115 @@ export const ProductionPlanning: React.FC = () => {
     return Object.values(hourlyGroups);
   }, [hourlyLogs, performancePlanId]);
 
+  // KPI Stat cards summary
+  const totalOrdersCount = orders.length;
+  const pendingOrdersCount = orders.filter(o => o.status === 'PENDING').length;
+  const scheduledOrdersCount = orders.filter(o => o.status === 'SCHEDULED').length;
+  const completedOrdersCount = orders.filter(o => o.status === 'COMPLETED').length;
+  const confirmedPlansCount = plans.filter(p => p.type === 'CONFIRMED').length;
+
+  const kpis = [
+    { title: 'Total Orders', value: totalOrdersCount, color: '#6366f1', icon: <AssignmentIcon fontSize="small" /> },
+    { title: 'Pending Orders', value: pendingOrdersCount, color: '#f59e0b', icon: <PlaylistAddIcon fontSize="small" /> },
+    { title: 'Scheduled Jobs', value: scheduledOrdersCount, color: '#10b981', icon: <CalendarMonthIcon fontSize="small" /> },
+    { title: 'Completed', value: completedOrdersCount, color: '#3b82f6', icon: <CheckCircleIcon fontSize="small" /> },
+    { title: 'Live Runs', value: confirmedPlansCount, color: '#10b981', icon: <TrendingUpIcon fontSize="small" /> },
+    { title: 'Draft Sandbox', value: simulatedJobsCount, color: '#ec4899', icon: <PublishIcon fontSize="small" /> },
+  ];
+
   return (
-    <Box sx={{ py: 2 }}>
+    <Box sx={{ py: 1 }}>
       {/* Page Title & Header */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 800, color: '#fff', letterSpacing: 0.5 }}>
-            Production Planning & Scheduling
+          <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CalendarMonthIcon sx={{ color: '#6366f1' }} />
+            Production Planning & Gantt Scheduler
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
-            Manage pending orders, perform what-if scheduler simulations, and track hourly outputs.
+          <Typography variant="body2" sx={{ color: '#64748b', mt: 0.3 }}>
+            Manage order queues, simulate what-if sequence scenarios, and record hourly output performance.
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1.5}>
+        <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', gap: 1 }}>
           <Button
             variant="contained"
             color="primary"
             startIcon={<AddIcon />}
             onClick={() => setIsOrderDialogOpen(true)}
-            sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
+            sx={{ borderRadius: '8px', fontWeight: 600, fontSize: '0.85rem' }}
           >
-            Create New Order
+            Create Order
           </Button>
           <Button
             variant="outlined"
             startIcon={<DownloadIcon />}
             onClick={handleExcelExport}
-            sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600, borderColor: 'rgba(255,255,255,0.12)' }}
+            sx={{ borderRadius: '8px', fontWeight: 600, fontSize: '0.85rem' }}
           >
-            Export Excel Report
+            Export Excel
           </Button>
         </Stack>
       </Box>
 
-      {/* Tabs Menu */}
+      {/* KPI Cards Grid */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        {kpis.map((card, i) => (
+          <Grid size={{ xs: 6, sm: 4, md: 2 }} key={i}>
+            <Card
+              sx={{
+                borderRadius: '12px',
+                border: '1px solid #e2e8f0',
+                bgcolor: '#ffffff',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                transition: 'transform 0.15s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.08)'
+                }
+              }}
+            >
+              <CardContent sx={{ p: '14px 12px !important', textAlign: 'center' }}>
+                <Box sx={{ color: card.color, display: 'inline-flex', p: 0.8, borderRadius: '8px', bgcolor: `${card.color}15`, mb: 0.5 }}>
+                  {card.icon}
+                </Box>
+                <Typography variant="caption" sx={{ fontSize: '0.675rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', display: 'block', letterSpacing: '0.04em' }}>
+                  {card.title}
+                </Typography>
+                <Typography variant="h6" sx={{ margin: '2px 0 0 0', color: '#0f172a', fontWeight: 800, fontSize: '1.2rem' }}>
+                  {card.value}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+
+      {/* Tabs Navigation */}
       <Paper
         sx={{
-          mb: 4,
+          mb: 3,
           borderRadius: '12px',
-          bgcolor: 'rgba(15, 23, 42, 0.4)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          bgcolor: '#ffffff',
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           overflow: 'hidden'
         }}
       >
         <Tabs
           value={activeTab}
           onChange={(_, val) => setActiveTab(val)}
-          indicatorColor="primary"
-          textColor="primary"
           variant="scrollable"
           scrollButtons="auto"
           sx={{
-            px: 2,
+            px: 1.5,
             '& .MuiTab-root': {
-              textTransform: 'none',
-              fontWeight: 600,
-              minHeight: 52,
-              fontSize: '0.9rem',
-              color: 'text.secondary',
-              '&.Mui-selected': { color: 'primary.main' }
+              minHeight: 48,
+              fontSize: '0.85rem',
             }
           }}
         >
           <Tab icon={<CalendarMonthIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Interactive Timeline Grid" />
-          <Tab icon={<PlaylistAddIcon sx={{ fontSize: 18 }} />} iconPosition="start" label={`Pending Orders (${orders.filter(o => o.status === 'PENDING').length})`} />
+          <Tab icon={<PlaylistAddIcon sx={{ fontSize: 18 }} />} iconPosition="start" label={`Pending Orders (${pendingOrdersCount})`} />
           <Tab icon={<TrendingUpIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Hourly Performance Log" />
           <Tab icon={<FlagIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Holidays & Downtimes" />
           <Tab icon={<InfoIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Dashboards & Analytics" />
@@ -1156,129 +1139,131 @@ export const ProductionPlanning: React.FC = () => {
       {/* TAB 1: INTERACTIVE TIMELINE SCHEDULER */}
       {/* ---------------------------------------------------- */}
       {activeTab === 0 && (
-        <Stack spacing={3}>
-          {/* Controls Bar */}
-          <Card sx={{ bgcolor: 'rgba(15, 23, 42, 0.2)', border: '1px solid rgba(255, 255, 255, 0.06)', mb: 3 }}>
-            <CardContent>
-              <Grid container spacing={3}>
-                {/* Row 1: Filters */}
-                <Grid container spacing={2} size={12} sx={{ alignItems: 'center' }}>
-                  <Grid size={{ xs: 12, md: 4 }}>
-                    <FormControl fullWidth>
-                      <InputLabel id="timeline-machine-label">Machine</InputLabel>
-                      <Select
-                        labelId="timeline-machine-label"
-                        label="Machine"
-                        value={selectedMachineId}
-                        onChange={(e) => setSelectedMachineId(e.target.value)}
-                      >
-                        {activeMachines.map((m) => (
-                          <MenuItem key={m.id} value={m.id}>
-                            {m.machineCode} - {m.machineName} (Cap: {m.capacity}/hr)
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                    <TextField
-                      label="From Date"
-                      type="date"
-                      fullWidth
-                      value={startDateStr}
-                      onChange={(e) => setStartDateStr(e.target.value)}
-                      slotProps={{ inputLabel: { shrink: true } }}
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                    <TextField
-                      label="To Date"
-                      type="date"
-                      fullWidth
-                      value={endDateStr}
-                      onChange={(e) => setEndDateStr(e.target.value)}
-                      slotProps={{ inputLabel: { shrink: true } }}
-                    />
-                  </Grid>
-                </Grid>
-
-                {/* Row 2: Mode & Actions */}
-                <Grid container spacing={2} size={12} sx={{ alignItems: 'center', mt: 1 }}>
-                  <Grid size={{ xs: 12, sm: 6, md: 6 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={isWhatIfMode}
-                          onChange={(e) => setIsWhatIfMode(e.target.checked)}
-                          color="warning"
-                        />
-                      }
-                      label={
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                            What-If Simulation Mode
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Toggle sandbox to preview changes without saving permanently.
-                          </Typography>
-                        </Box>
-                      }
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 6, md: 6 }} sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5 }}>
-                    {isWhatIfMode && simulatedJobsCount > 0 && (
-                      <>
-                        <Button
-                          variant="contained"
-                          color="warning"
-                          startIcon={<PublishIcon />}
-                          onClick={handlePromoteSimulation}
-                          sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
-                        >
-                          Apply / Save Plans
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          color="error"
-                          startIcon={<UndoIcon />}
-                          onClick={handleClearSimulation}
-                          sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
-                        >
-                          Reset Draft
-                        </Button>
-                      </>
-                    )}
-                    <Button
-                      variant="contained"
-                      color="secondary"
-                      startIcon={<CalendarMonthIcon />}
-                      onClick={() => handleOpenSchedule(null, selectedMachineId, 8, startDateStr)}
-                      sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
+        <Stack spacing={2.5}>
+          {/* Controls Bar Card */}
+          <Card sx={{ bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', p: 0.5 }}>
+            <CardContent sx={{ p: 2 }}>
+              <Grid container spacing={2} sx={{ alignItems: 'center' }}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="timeline-machine-label">Select Machine</InputLabel>
+                    <Select
+                      labelId="timeline-machine-label"
+                      label="Select Machine"
+                      value={selectedMachineId}
+                      onChange={(e) => setSelectedMachineId(e.target.value)}
                     >
-                      Schedule Job
-                    </Button>
-                  </Grid>
+                      {activeMachines.map((m) => (
+                        <MenuItem key={m.id} value={m.id}>
+                          {m.machineCode} - {m.machineName} (Cap: {m.capacity}/hr)
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid size={{ xs: 6, sm: 3, md: 2.5 }}>
+                  <TextField
+                    label="From Date"
+                    type="date"
+                    size="small"
+                    fullWidth
+                    value={startDateStr}
+                    onChange={(e) => setStartDateStr(e.target.value)}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 6, sm: 3, md: 2.5 }}>
+                  <TextField
+                    label="To Date"
+                    type="date"
+                    size="small"
+                    fullWidth
+                    value={endDateStr}
+                    onChange={(e) => setEndDateStr(e.target.value)}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, md: 3 }} sx={{ display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' }, gap: 1 }}>
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    size="small"
+                    startIcon={<CalendarMonthIcon />}
+                    onClick={() => handleOpenSchedule(null, selectedMachineId, 8, startDateStr)}
+                    sx={{ borderRadius: '8px', fontWeight: 600, textTransform: 'none', py: 0.9, px: 2 }}
+                  >
+                    Schedule Job
+                  </Button>
                 </Grid>
               </Grid>
+
+              {/* What-If Simulation Row */}
+              <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={isWhatIfMode}
+                      onChange={(e) => setIsWhatIfMode(e.target.checked)}
+                      color="warning"
+                      size="small"
+                    />
+                  }
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: isWhatIfMode ? '#d97706' : '#334155' }}>
+                        What-If Simulation Sandbox
+                      </Typography>
+                      {isWhatIfMode && (
+                        <Chip label="SANDBOX ACTIVE" size="small" color="warning" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800 }} />
+                      )}
+                    </Box>
+                  }
+                />
+
+                {isWhatIfMode && simulatedJobsCount > 0 && (
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      variant="contained"
+                      color="warning"
+                      size="small"
+                      startIcon={<PublishIcon />}
+                      onClick={handlePromoteSimulation}
+                      sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 700 }}
+                    >
+                      Promote Drafts ({simulatedJobsCount})
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      size="small"
+                      startIcon={<UndoIcon />}
+                      onClick={handleClearSimulation}
+                      sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
+                    >
+                      Clear Draft
+                    </Button>
+                  </Stack>
+                )}
+              </Box>
             </CardContent>
           </Card>
 
-          {/* Simulated Mode Warning Alert Banner */}
+          {/* Simulated Mode Alert Banner */}
           {isWhatIfMode && (
-            <Alert severity="warning" variant="outlined" sx={{ borderRadius: '8px' }}>
-              <strong>What-If Sandbox Mode is Active.</strong> You are editing a draft environment. Total draft jobs in buffer: <strong>{simulatedJobsCount}</strong>. Press <strong>Apply / Save Plans</strong> to confirm them.
+            <Alert severity="warning" sx={{ borderRadius: '10px' }}>
+              <strong>What-If Sandbox Mode is Active.</strong> Draft jobs appear in amber with dashed borders. Click <strong>Promote Drafts</strong> to confirm them into the live schedule.
             </Alert>
           )}
 
-          {/* Collision / Scheduling Warnings Panel */}
+          {/* Scheduling Warnings */}
           {schedulingConflicts.length > 0 && (
-            <Alert severity="error" icon={<WarningIcon />} sx={{ borderRadius: '8px' }}>
+            <Alert severity="error" icon={<WarningIcon />} sx={{ borderRadius: '10px' }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
-                Production Timeline Warnings & Delays:
+                Projected Delivery Date Delays:
               </Typography>
               <ul style={{ margin: 0, paddingLeft: 20 }}>
                 {schedulingConflicts.map((c, i) => (
-                  <li key={i}><Typography variant="body2">{c}</Typography></li>
+                  <li key={i}><Typography variant="body2" sx={{ fontSize: '0.825rem' }}>{c}</Typography></li>
                 ))}
               </ul>
             </Alert>
@@ -1293,13 +1278,14 @@ export const ProductionPlanning: React.FC = () => {
                   size="small"
                   onClick={() => seedDemoDataMutation.mutate()}
                   disabled={seedDemoDataMutation.isPending}
+                  sx={{ fontWeight: 700, borderRadius: '6px' }}
                 >
                   Load Demo Data
                 </Button>
               }
-              sx={{ borderRadius: '8px' }}
+              sx={{ borderRadius: '10px' }}
             >
-              No orders found in your production planner. Press the button to load sample production planning data (orders, schedules, holidays, and hourly logs).
+              No orders found in your production planner. Press "Load Demo Data" to load realistic sample schedules and performance logs.
             </Alert>
           )}
 
@@ -1309,20 +1295,20 @@ export const ProductionPlanning: React.FC = () => {
               <CircularProgress />
             </Box>
           ) : !selectedMachineId ? (
-            <Alert severity="warning" sx={{ borderRadius: '8px' }}>
+            <Alert severity="warning" sx={{ borderRadius: '10px' }}>
               Please select a machine to view its schedule.
             </Alert>
           ) : (
-            <TableContainer component={Paper} sx={{ borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.08)', overflowX: 'auto', bgcolor: '#090d16' }}>
-              <Table size="small" stickyHeader sx={{ minWidth: 1200 }}>
+            <TableContainer component={Paper} sx={{ borderRadius: '14px', border: '1px solid #e2e8f0', overflowX: 'auto', bgcolor: '#ffffff', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+              <Table size="small" stickyHeader sx={{ minWidth: 1000 }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ minWidth: 120, fontWeight: 800, bgcolor: '#0f172a' }}>Hour / Day</TableCell>
+                    <TableCell sx={{ minWidth: 100, fontWeight: 800, bgcolor: '#f1f5f9', color: '#334155', borderRight: '1px solid #e2e8f0' }}>Hour / Day</TableCell>
                     {dateRangeDays.map((dayStr) => {
                       const dayDate = new Date(dayStr);
                       const formattedDate = dayDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
                       return (
-                        <TableCell key={dayStr} align="center" sx={{ fontWeight: 700, bgcolor: '#0f172a', minWidth: 110 }}>
+                        <TableCell key={dayStr} align="center" sx={{ fontWeight: 700, bgcolor: '#f1f5f9', color: '#334155', minWidth: 110, borderRight: '1px solid #e2e8f0' }}>
                           {formattedDate}
                         </TableCell>
                       );
@@ -1332,17 +1318,15 @@ export const ProductionPlanning: React.FC = () => {
                 <TableBody>
                   {dateRangeDays.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={dateRangeDays.length + 1} align="center" sx={{ py: 6 }}>
+                      <TableCell colSpan={dateRangeDays.length + 1} align="center" sx={{ py: 6, color: '#64748b' }}>
                         No days found in range. Please select a valid date range.
                       </TableCell>
                     </TableRow>
                   ) : (
                     Array.from({ length: 24 }).map((_, h) => (
-                      <TableRow key={h} hover sx={{ '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.02) !important' } }}>
-                        <TableCell sx={{ fontWeight: 700, borderRight: '1px solid rgba(255, 255, 255, 0.06)', bgcolor: '#0f172a' }}>
-                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                            {String(h).padStart(2, '0')}:00
-                          </Typography>
+                      <TableRow key={h} hover sx={{ '&:hover': { bgcolor: '#f8fafc !important' } }}>
+                        <TableCell sx={{ fontWeight: 700, borderRight: '1px solid #e2e8f0', bgcolor: '#f8fafc', color: '#475569', fontSize: '0.8rem', py: 1 }}>
+                          {String(h).padStart(2, '0')}:00
                         </TableCell>
 
                         {dateRangeDays.map((dayStr) => {
@@ -1352,11 +1336,11 @@ export const ProductionPlanning: React.FC = () => {
                           if (cell.type === 'CONFIRMED') {
                             cellContent = (
                               <Tooltip title={`${cell.details} | Start: ${h}:00 (Click to Log Output / Manage)`} arrow>
-                                <Box sx={{ py: 1.2, px: 0.5, height: '100%', cursor: 'pointer', transition: 'all 0.1s', '&:hover': { transform: 'scale(1.02)' } }}>
-                                  <Typography variant="caption" sx={{ fontWeight: 800, display: 'block', fontSize: '0.7rem' }}>
+                                <Box sx={{ py: 0.8, px: 0.5, height: '100%', cursor: 'pointer', transition: 'all 0.1s', '&:hover': { transform: 'scale(1.02)' } }}>
+                                  <Typography variant="caption" sx={{ fontWeight: 800, display: 'block', fontSize: '0.75rem', color: '#065f46' }}>
                                     {cell.label}
                                   </Typography>
-                                  <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.6)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                  <Typography variant="caption" sx={{ fontSize: '0.65rem', color: '#047857', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                                     Live Confirmed
                                   </Typography>
                                 </Box>
@@ -1365,12 +1349,12 @@ export const ProductionPlanning: React.FC = () => {
                           } else if (cell.type === 'SIMULATED') {
                             cellContent = (
                               <Tooltip title={`${cell.details} | Simulation Draft (Click to Log Output / Manage)`} arrow>
-                                <Box sx={{ py: 1.2, px: 0.5, height: '100%', cursor: 'pointer', transition: 'all 0.1s', '&:hover': { transform: 'scale(1.02)' } }}>
-                                  <Typography variant="caption" sx={{ fontWeight: 800, display: 'block', fontSize: '0.7rem' }}>
+                                <Box sx={{ py: 0.8, px: 0.5, height: '100%', cursor: 'pointer', transition: 'all 0.1s', '&:hover': { transform: 'scale(1.02)' } }}>
+                                  <Typography variant="caption" sx={{ fontWeight: 800, display: 'block', fontSize: '0.75rem', color: '#92400e' }}>
                                     {cell.label} *
                                   </Typography>
-                                  <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.6)', display: 'block' }}>
-                                    Draft
+                                  <Typography variant="caption" sx={{ fontSize: '0.65rem', color: '#b45309', display: 'block' }}>
+                                    Draft Sandbox
                                   </Typography>
                                 </Box>
                               </Tooltip>
@@ -1378,9 +1362,9 @@ export const ProductionPlanning: React.FC = () => {
                           } else if (cell.type === 'DOWNTIME') {
                             cellContent = (
                               <Tooltip title={cell.details} arrow>
-                                <Box sx={{ py: 1.2, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                                  <BlockIcon sx={{ fontSize: 14, mb: 0.2 }} />
-                                  <Typography variant="caption" sx={{ fontSize: '0.6rem', fontWeight: 700 }}>
+                                <Box sx={{ py: 0.8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                                  <BlockIcon sx={{ fontSize: 14, mb: 0.2, color: '#ef4444' }} />
+                                  <Typography variant="caption" sx={{ fontSize: '0.65rem', fontWeight: 800, color: '#b91c1c' }}>
                                     DOWN
                                   </Typography>
                                 </Box>
@@ -1389,9 +1373,9 @@ export const ProductionPlanning: React.FC = () => {
                           } else if (cell.type === 'HOLIDAY') {
                             cellContent = (
                               <Tooltip title={cell.details} arrow>
-                                <Box sx={{ py: 1.2, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                                  <FlagIcon sx={{ fontSize: 14, mb: 0.2 }} />
-                                  <Typography variant="caption" sx={{ fontSize: '0.6rem', fontWeight: 700 }}>
+                                <Box sx={{ py: 0.8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                                  <FlagIcon sx={{ fontSize: 14, mb: 0.2, color: '#a855f7' }} />
+                                  <Typography variant="caption" sx={{ fontSize: '0.65rem', fontWeight: 800, color: '#7e22ce' }}>
                                     HOLIDAY
                                   </Typography>
                                 </Box>
@@ -1403,9 +1387,9 @@ export const ProductionPlanning: React.FC = () => {
                               <IconButton
                                 size="small"
                                 onClick={() => handleOpenSchedule(null, selectedMachineId, h, dayStr)}
-                                sx={{ color: 'rgba(255,255,255,0.06)', '&:hover': { color: 'primary.main', bgcolor: 'rgba(99, 102, 241, 0.08)' } }}
+                                sx={{ color: '#cbd5e1', '&:hover': { color: '#6366f1', bgcolor: 'rgba(99, 102, 241, 0.08)' } }}
                               >
-                                <AddIcon sx={{ fontSize: 14 }} />
+                                <AddIcon sx={{ fontSize: 13 }} />
                               </IconButton>
                             );
                           }
@@ -1423,10 +1407,10 @@ export const ProductionPlanning: React.FC = () => {
                               }}
                               sx={{
                                 p: 0,
-                                borderRight: '1px solid rgba(255, 255, 255, 0.04)',
+                                borderRight: '1px solid #f1f5f9',
+                                borderBottom: '1px solid #f1f5f9',
                                 bgcolor: colorConfig?.bg || 'transparent',
                                 borderTop: colorConfig?.border || 'inherit',
-                                borderBottom: colorConfig?.border || 'inherit',
                                 color: colorConfig?.text || 'inherit',
                                 transition: 'all 0.15s'
                               }}
@@ -1444,27 +1428,27 @@ export const ProductionPlanning: React.FC = () => {
           )}
 
           {/* Timeline legend details card */}
-          <Card sx={{ bgcolor: 'rgba(15, 23, 42, 0.2)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-            <CardContent>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#fff', mb: 1.5 }}>
-                Scheduler Colors Legend:
+          <Card sx={{ bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+            <CardContent sx={{ p: 2 }}>
+              <Typography variant="caption" sx={{ fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
+                Scheduler Status Legend:
               </Typography>
-              <Stack direction="row" spacing={3} useFlexGap sx={{ flexWrap: 'wrap', gap: 2 }}>
+              <Stack direction="row" spacing={2.5} sx={{ flexWrap: 'wrap', gap: 1.5 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Box sx={{ width: 16, height: 16, borderRadius: 0.5, bgcolor: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981' }} />
-                  <Typography variant="caption" color="text.secondary">Confirmed Plan</Typography>
+                  <Box sx={{ width: 14, height: 14, borderRadius: 0.5, bgcolor: 'rgba(16, 185, 129, 0.18)', border: '1px solid #10b981' }} />
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: '#334155' }}>Confirmed Live Run</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Box sx={{ width: 16, height: 16, borderRadius: 0.5, bgcolor: 'rgba(245, 158, 11, 0.1)', border: '1px dashed #f59e0b' }} />
-                  <Typography variant="caption" color="text.secondary">What-If Simulated Job</Typography>
+                  <Box sx={{ width: 14, height: 14, borderRadius: 0.5, bgcolor: 'rgba(245, 158, 11, 0.18)', border: '1px dashed #f59e0b' }} />
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: '#334155' }}>What-If Sandbox Draft</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Box sx={{ width: 16, height: 16, borderRadius: 0.5, bgcolor: 'rgba(239, 68, 68, 0.15)', border: '1px solid #ef4444' }} />
-                  <Typography variant="caption" color="text.secondary">Machine Breakdown Downtime</Typography>
+                  <Box sx={{ width: 14, height: 14, borderRadius: 0.5, bgcolor: 'rgba(239, 68, 68, 0.18)', border: '1px solid #ef4444' }} />
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: '#334155' }}>Machine Downtime</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Box sx={{ width: 16, height: 16, borderRadius: 0.5, bgcolor: 'rgba(168, 85, 247, 0.15)', border: '1px solid #a855f7' }} />
-                  <Typography variant="caption" color="text.secondary">Tenant Holidays</Typography>
+                  <Box sx={{ width: 14, height: 14, borderRadius: 0.5, bgcolor: 'rgba(168, 85, 247, 0.18)', border: '1px solid #a855f7' }} />
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: '#334155' }}>Factory Holiday</Typography>
                 </Box>
               </Stack>
             </CardContent>
@@ -1476,34 +1460,39 @@ export const ProductionPlanning: React.FC = () => {
       {/* TAB 2: PENDING ORDERS */}
       {/* ---------------------------------------------------- */}
       {activeTab === 1 && (
-        <Stack spacing={3}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#fff' }}>
-              Pending & Active Production Orders
-            </Typography>
+        <Stack spacing={2.5}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                Pending & Scheduled Production Orders
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#64748b' }}>
+                Queue of client customer orders awaiting assignment to shop-floor lines.
+              </Typography>
+            </Box>
             <Button
               variant="contained"
               color="primary"
               startIcon={<AddIcon />}
               onClick={() => setIsOrderDialogOpen(true)}
-              sx={{ borderRadius: '8px', textTransform: 'none' }}
+              sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
             >
-              Add New Production Order
+              Add New Order
             </Button>
           </Box>
 
-          <TableContainer component={Paper} sx={{ borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          <TableContainer component={Paper} sx={{ borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
             <Table>
-              <TableHead sx={{ bgcolor: 'rgba(255,255,255,0.02)' }}>
+              <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700 }}>Order Number</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Product Name</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Category</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }} align="right">Quantity</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Due Date</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Priority</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }} align="center">Actions</TableCell>
+                  <TableCell>Order Number</TableCell>
+                  <TableCell>Product Name</TableCell>
+                  <TableCell>Category</TableCell>
+                  <TableCell align="right">Quantity</TableCell>
+                  <TableCell>Due Date</TableCell>
+                  <TableCell>Priority</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell align="center">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1515,8 +1504,8 @@ export const ProductionPlanning: React.FC = () => {
                   </TableRow>
                 ) : orders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
-                      No orders logged yet. Click "Add New Production Order" to create one.
+                    <TableCell colSpan={8} align="center" sx={{ py: 6, color: '#64748b' }}>
+                      No orders logged yet. Click "Add New Order" to create one.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -1536,8 +1525,8 @@ export const ProductionPlanning: React.FC = () => {
 
                     return (
                       <TableRow key={ord.id} hover>
-                        <TableCell sx={{ fontWeight: 700 }}>{ord.orderNumber}</TableCell>
-                        <TableCell>{ord.productName}</TableCell>
+                        <TableCell sx={{ fontWeight: 700, color: '#6366f1' }}>{ord.orderNumber}</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{ord.productName}</TableCell>
                         <TableCell>{catName}</TableCell>
                         <TableCell align="right" sx={{ fontWeight: 700 }}>{ord.quantity.toLocaleString()}</TableCell>
                         <TableCell>{dueDateObj.toLocaleDateString()}</TableCell>
@@ -1556,7 +1545,7 @@ export const ProductionPlanning: React.FC = () => {
                                 color="success"
                                 startIcon={<CalendarMonthIcon sx={{ fontSize: 14 }} />}
                                 onClick={() => handleOpenSchedule(ord)}
-                                sx={{ textTransform: 'none', borderRadius: '6px', fontSize: '0.75rem', py: 0.5 }}
+                                sx={{ textTransform: 'none', borderRadius: '6px', fontSize: '0.75rem', py: 0.4 }}
                               >
                                 Schedule
                               </Button>
@@ -1571,7 +1560,7 @@ export const ProductionPlanning: React.FC = () => {
                                     updateOrderMutation.mutate({ id: ord.id, data: { status: 'COMPLETED' } });
                                   }
                                 }}
-                                sx={{ textTransform: 'none', borderRadius: '6px', fontSize: '0.75rem', py: 0.5 }}
+                                sx={{ textTransform: 'none', borderRadius: '6px', fontSize: '0.75rem', py: 0.4 }}
                               >
                                 Complete
                               </Button>
@@ -1585,7 +1574,7 @@ export const ProductionPlanning: React.FC = () => {
                                 }
                               }}
                             >
-                              <DeleteIcon sx={{ fontSize: 18 }} />
+                              <DeleteIcon sx={{ fontSize: 17 }} />
                             </IconButton>
                           </Stack>
                         </TableCell>
@@ -1603,27 +1592,27 @@ export const ProductionPlanning: React.FC = () => {
       {/* TAB 3: HOURLY PERFORMANCE LOG */}
       {/* ---------------------------------------------------- */}
       {activeTab === 2 && (
-        <Stack spacing={3}>
+        <Stack spacing={2.5}>
           <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#fff' }}>
+            <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
               Hourly Output Performance Tracking
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Select a confirmed scheduled job and record hourly production volumes to measure against machine budgets.
+            <Typography variant="body2" sx={{ color: '#64748b' }}>
+              Select a confirmed scheduled job and record hourly production volumes against planned machine capacity.
             </Typography>
           </Box>
 
-          <TableContainer component={Paper} sx={{ borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          <TableContainer component={Paper} sx={{ borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
             <Table>
-              <TableHead sx={{ bgcolor: 'rgba(255,255,255,0.02)' }}>
+              <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700 }}>Order Number</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Product Name</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Scheduled Machine</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Start Date/Time</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>End Date/Time</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Hourly Capacity</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }} align="center">Action</TableCell>
+                  <TableCell>Order Number</TableCell>
+                  <TableCell>Product Name</TableCell>
+                  <TableCell>Scheduled Machine</TableCell>
+                  <TableCell>Start Time</TableCell>
+                  <TableCell>End Time</TableCell>
+                  <TableCell>Hourly Capacity</TableCell>
+                  <TableCell align="center">Action</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1635,7 +1624,7 @@ export const ProductionPlanning: React.FC = () => {
                   </TableRow>
                 ) : plans.filter(p => p.type === 'CONFIRMED').length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                    <TableCell colSpan={7} align="center" sx={{ py: 6, color: '#64748b' }}>
                       No confirmed active scheduled plans. Go to "Timeline Grid" or "Pending Orders" to schedule a plan.
                     </TableCell>
                   </TableRow>
@@ -1648,8 +1637,8 @@ export const ProductionPlanning: React.FC = () => {
 
                     return (
                       <TableRow key={plan.id} hover>
-                        <TableCell sx={{ fontWeight: 700 }}>{ord.orderNumber}</TableCell>
-                        <TableCell>{ord.productName}</TableCell>
+                        <TableCell sx={{ fontWeight: 700, color: '#6366f1' }}>{ord.orderNumber}</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{ord.productName}</TableCell>
                         <TableCell>{getMachineName(plan.machineId)}</TableCell>
                         <TableCell>{pStart.toLocaleString()}</TableCell>
                         <TableCell>{pEnd.toLocaleString()}</TableCell>
@@ -1658,9 +1647,10 @@ export const ProductionPlanning: React.FC = () => {
                           <Button
                             variant="contained"
                             color="primary"
+                            size="small"
                             startIcon={<TrendingUpIcon />}
                             onClick={() => handleOpenHourlyLog(plan)}
-                            sx={{ textTransform: 'none', borderRadius: '6px' }}
+                            sx={{ textTransform: 'none', borderRadius: '6px', fontWeight: 600 }}
                           >
                             Log Output
                           </Button>
@@ -1679,32 +1669,34 @@ export const ProductionPlanning: React.FC = () => {
       {/* TAB 4: HOLIDAYS & DOWNTIMES */}
       {/* ---------------------------------------------------- */}
       {activeTab === 3 && (
-        <Grid container spacing={4}>
+        <Grid container spacing={3}>
           {/* Holidays panel */}
           <Grid size={{ xs: 12, md: 6 }}>
-            <Card sx={{ bgcolor: 'rgba(15, 23, 42, 0.2)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+            <Card sx={{ bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', height: '100%' }}>
               <CardContent sx={{ p: 3 }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, color: '#fff', mb: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a', mb: 2 }}>
                   Factory Holidays Master
                 </Typography>
 
                 {/* Form */}
-                <form onSubmit={handleAddHoliday} style={{ marginBottom: 24 }}>
-                  <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-end' }}>
-                    <Box sx={{ flexGrow: 1 }}>
+                <form onSubmit={handleAddHoliday} style={{ marginBottom: 20 }}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'flex-end' }}>
+                    <Box sx={{ flexGrow: 1, width: '100%' }}>
                       <TextField
                         label="Holiday Date"
                         type="date"
+                        size="small"
                         fullWidth
                         value={holidayForm.dateStr}
                         onChange={(e) => setHolidayForm({ ...holidayForm, dateStr: e.target.value })}
                         slotProps={{ inputLabel: { shrink: true } }}
                       />
                     </Box>
-                    <Box sx={{ flexGrow: 2 }}>
+                    <Box sx={{ flexGrow: 2, width: '100%' }}>
                       <TextField
                         label="Holiday Name"
-                        placeholder="e.g. Christmas Day"
+                        placeholder="e.g. National Day"
+                        size="small"
                         fullWidth
                         value={holidayForm.name}
                         onChange={(e) => setHolidayForm({ ...holidayForm, name: e.target.value })}
@@ -1714,29 +1706,28 @@ export const ProductionPlanning: React.FC = () => {
                       type="submit"
                       variant="contained"
                       color="secondary"
-                      sx={{ height: 56, borderRadius: '8px', textTransform: 'none', px: 3 }}
+                      sx={{ height: 40, borderRadius: '8px', textTransform: 'none', px: 2.5, fontWeight: 700, width: { xs: '100%', sm: 'auto' } }}
                     >
                       Add
                     </Button>
                   </Stack>
                 </form>
 
-                <Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.06)' }} />
+                <Divider sx={{ mb: 2 }} />
 
-                {/* Table */}
                 <TableContainer component={Paper} sx={{ bgcolor: 'transparent', border: 'none', maxHeight: 350 }}>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>Holiday Description</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }} align="right">Action</TableCell>
+                        <TableCell>Date</TableCell>
+                        <TableCell>Holiday Description</TableCell>
+                        <TableCell align="right">Action</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {holidays.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={3} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                          <TableCell colSpan={3} align="center" sx={{ py: 4, color: '#64748b' }}>
                             No factory holidays registered yet.
                           </TableCell>
                         </TableRow>
@@ -1766,32 +1757,32 @@ export const ProductionPlanning: React.FC = () => {
 
           {/* Downtimes panel */}
           <Grid size={{ xs: 12, md: 6 }}>
-            <Card sx={{ bgcolor: 'rgba(15, 23, 42, 0.2)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+            <Card sx={{ bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', height: '100%' }}>
               <CardContent sx={{ p: 3 }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, color: '#fff', mb: 1 }}>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a', mb: 0.5 }}>
                   Machine Breakdown Downtimes (Active)
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 3 }}>
-                  Read-only view of recorded breakages affecting active planning schedules. Edit via the Downtime Entry portal.
+                <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mb: 2 }}>
+                  Read-only view of recorded breakages affecting planning. Log entries via the Downtime portal.
                 </Typography>
 
-                <Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.06)' }} />
+                <Divider sx={{ mb: 2 }} />
 
-                <TableContainer component={Paper} sx={{ bgcolor: 'transparent', border: 'none', maxHeight: 420 }}>
+                <TableContainer component={Paper} sx={{ bgcolor: 'transparent', border: 'none', maxHeight: 400 }}>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: 700 }}>Machine</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>Start Time</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>End Time</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>Reason</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }} align="right">Duration</TableCell>
+                        <TableCell>Machine</TableCell>
+                        <TableCell>Start Time</TableCell>
+                        <TableCell>End Time</TableCell>
+                        <TableCell>Reason</TableCell>
+                        <TableCell align="right">Duration</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {downtimeRecords.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                          <TableCell colSpan={5} align="center" sx={{ py: 4, color: '#64748b' }}>
                             No active downtime logs recorded.
                           </TableCell>
                         </TableRow>
@@ -1801,11 +1792,11 @@ export const ProductionPlanning: React.FC = () => {
                           const end = parseDate(dt.endTime);
                           return (
                             <TableRow key={dt.id}>
-                              <TableCell sx={{ fontWeight: 700 }}>{getMachineName(dt.machineId).split(' - ')[0]}</TableCell>
+                              <TableCell sx={{ fontWeight: 700, color: '#6366f1' }}>{getMachineName(dt.machineId).split(' - ')[0]}</TableCell>
                               <TableCell sx={{ fontSize: '0.75rem' }}>{start.toLocaleString()}</TableCell>
                               <TableCell sx={{ fontSize: '0.75rem' }}>{end.toLocaleString()}</TableCell>
                               <TableCell>{dt.reason}</TableCell>
-                              <TableCell align="right" sx={{ fontWeight: 700 }}>{dt.duration}m</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 700, color: '#ef4444' }}>{dt.duration}m</TableCell>
                             </TableRow>
                           );
                         })
@@ -1823,13 +1814,12 @@ export const ProductionPlanning: React.FC = () => {
       {/* TAB 5: DASHBOARDS & ANALYTICS */}
       {/* ---------------------------------------------------- */}
       {activeTab === 4 && (
-        <Stack spacing={4}>
-          {/* Top Row Cards */}
+        <Stack spacing={3}>
           <Grid container spacing={3}>
             <Grid size={{ xs: 12, md: 6 }}>
-              <Card sx={{ bgcolor: 'rgba(15, 23, 42, 0.3)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '12px' }}>
+              <Card sx={{ bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px' }}>
                 <CardContent sx={{ p: 3 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.secondary', mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', mb: 2 }}>
                     Production Orders Status Funnel
                   </Typography>
                   <Box sx={{ height: 260, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -1844,7 +1834,7 @@ export const ProductionPlanning: React.FC = () => {
                             nameKey="name"
                             cx="50%"
                             cy="50%"
-                            innerRadius={60}
+                            innerRadius={55}
                             outerRadius={80}
                             paddingAngle={5}
                           >
@@ -1852,7 +1842,7 @@ export const ProductionPlanning: React.FC = () => {
                               <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
                           </Pie>
-                          <ChartTooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: 8 }} />
+                          <ChartTooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#0f172a' }} />
                           <Legend />
                         </PieChart>
                       </ResponsiveContainer>
@@ -1862,11 +1852,10 @@ export const ProductionPlanning: React.FC = () => {
               </Card>
             </Grid>
 
-            {/* Machine Availability Rate */}
             <Grid size={{ xs: 12, md: 6 }}>
-              <Card sx={{ bgcolor: 'rgba(15, 23, 42, 0.3)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '12px' }}>
+              <Card sx={{ bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px' }}>
                 <CardContent sx={{ p: 3 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.secondary', mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', mb: 2 }}>
                     30-Day Machine Scheduling & Downtime Load
                   </Typography>
                   <Box sx={{ height: 260 }}>
@@ -1875,14 +1864,14 @@ export const ProductionPlanning: React.FC = () => {
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={machineUtilization} layout="vertical">
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                          <XAxis type="number" stroke="rgba(255,255,255,0.4)" domain={[0, 100]} />
-                          <YAxis dataKey="machineName" type="category" stroke="rgba(255,255,255,0.4)" />
-                          <ChartTooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: 8 }} />
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                          <XAxis type="number" stroke="#94a3b8" domain={[0, 100]} />
+                          <YAxis dataKey="machineName" type="category" stroke="#94a3b8" />
+                          <ChartTooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#0f172a' }} />
                           <Legend />
                           <Bar dataKey="Scheduled %" stackId="a" fill="#10b981" />
                           <Bar dataKey="Downtime %" stackId="a" fill="#ef4444" />
-                          <Bar dataKey="Idle %" stackId="a" fill="rgba(255,255,255,0.1)" />
+                          <Bar dataKey="Idle %" stackId="a" fill="#cbd5e1" />
                         </BarChart>
                       </ResponsiveContainer>
                     )}
@@ -1893,20 +1882,19 @@ export const ProductionPlanning: React.FC = () => {
           </Grid>
 
           {/* Hourly Performance Line Chart */}
-          <Card sx={{ bgcolor: 'rgba(15, 23, 42, 0.3)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '12px' }}>
+          <Card sx={{ bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px' }}>
             <CardContent sx={{ p: 3 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
                 <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#fff' }}>
-                    Hourly Actual Output vs. Plan Budget
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                    Hourly Actual Output vs. Planned Target
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Observe output yield variances on an hourly resolution.
+                  <Typography variant="body2" sx={{ color: '#64748b' }}>
+                    Track production volume variances on an hour-by-hour resolution.
                   </Typography>
                 </Box>
 
-                {/* Select Job */}
-                <FormControl sx={{ minWidth: 260 }}>
+                <FormControl size="small" sx={{ minWidth: 260 }}>
                   <InputLabel id="perf-plan-label">Select Scheduled Plan</InputLabel>
                   <Select
                     labelId="perf-plan-label"
@@ -1930,13 +1918,13 @@ export const ProductionPlanning: React.FC = () => {
               <Box sx={{ height: 350 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={performanceChartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                    <XAxis dataKey="hourLabel" stroke="rgba(255,255,255,0.4)" />
-                    <YAxis stroke="rgba(255,255,255,0.4)" />
-                    <ChartTooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: 8 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="hourLabel" stroke="#94a3b8" />
+                    <YAxis stroke="#94a3b8" />
+                    <ChartTooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#0f172a' }} />
                     <Legend />
-                    <Line type="monotone" dataKey="Budget" stroke="#6366f1" strokeWidth={3} dot={{ r: 4 }} />
-                    <Line type="monotone" dataKey="Actual" stroke="#10b981" strokeWidth={3} dot={{ r: 6 }} />
+                    <Line type="monotone" dataKey="Budget" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="Actual" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </Box>
@@ -1956,21 +1944,21 @@ export const ProductionPlanning: React.FC = () => {
         slotProps={{
           paper: {
             sx: {
-              bgcolor: '#0f172a',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
               borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              p: 1
             }
           }
         }}
       >
-        <DialogTitle sx={{ fontWeight: 800, color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <DialogTitle sx={{ fontWeight: 800, color: '#0f172a', pb: 1 }}>
           Create New Production Order
         </DialogTitle>
         <form onSubmit={handleCreateOrder}>
-          <DialogContent sx={{ p: 3 }}>
-            <Stack spacing={3}>
+          <DialogContent sx={{ pt: 1 }}>
+            <Stack spacing={2.5}>
               <TextField
-                label="Order Number / Reference Code"
+                label="Order Number / Code"
                 placeholder="e.g. ORD-1092"
                 fullWidth
                 required
@@ -1979,7 +1967,7 @@ export const ProductionPlanning: React.FC = () => {
               />
               <TextField
                 label="Product Name / SKU"
-                placeholder="e.g. Apparel: Crewneck T-Shirt Medium"
+                placeholder="e.g. Premium Cotton Shirt"
                 fullWidth
                 required
                 value={orderForm.productName}
@@ -2020,7 +2008,7 @@ export const ProductionPlanning: React.FC = () => {
                 onChange={(e) => setOrderForm({ ...orderForm, quantity: Number(e.target.value) })}
               />
               <TextField
-                label="Customer Delivery Due Date"
+                label="Delivery Due Date"
                 type="date"
                 fullWidth
                 required
@@ -2030,11 +2018,11 @@ export const ProductionPlanning: React.FC = () => {
               />
             </Stack>
           </DialogContent>
-          <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <Button onClick={() => setIsOrderDialogOpen(false)} color="inherit">
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setIsOrderDialogOpen(false)} variant="outlined" sx={{ borderRadius: '8px' }}>
               Cancel
             </Button>
-            <Button type="submit" variant="contained" color="secondary" disabled={createOrderMutation.isPending}>
+            <Button type="submit" variant="contained" color="secondary" disabled={createOrderMutation.isPending} sx={{ borderRadius: '8px', fontWeight: 700 }}>
               Create Order
             </Button>
           </DialogActions>
@@ -2052,19 +2040,19 @@ export const ProductionPlanning: React.FC = () => {
         slotProps={{
           paper: {
             sx: {
-              bgcolor: '#0f172a',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
               borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              p: 1
             }
           }
         }}
       >
-        <DialogTitle sx={{ fontWeight: 800, color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <DialogTitle sx={{ fontWeight: 800, color: '#0f172a', pb: 1 }}>
           {selectedOrder ? `Schedule Order ${selectedOrder.orderNumber}` : 'Schedule Production Plan Job'}
         </DialogTitle>
         <form onSubmit={handleCreateSchedule}>
-          <DialogContent sx={{ p: 3 }}>
-            <Stack spacing={3}>
+          <DialogContent sx={{ pt: 1 }}>
+            <Stack spacing={2.5}>
               {!selectedOrder && (
                 <FormControl fullWidth required>
                   <InputLabel id="sched-ord-label">Select Pending Order</InputLabel>
@@ -2084,10 +2072,10 @@ export const ProductionPlanning: React.FC = () => {
               )}
 
               <FormControl fullWidth required>
-                <InputLabel id="sched-mach-label">Select Target Machine</InputLabel>
+                <InputLabel id="sched-mach-label">Target Machine</InputLabel>
                 <Select
                   labelId="sched-mach-label"
-                  label="Select Target Machine"
+                  label="Target Machine"
                   value={scheduleForm.machineId}
                   onChange={(e) => setScheduleForm({ ...scheduleForm, machineId: e.target.value })}
                 >
@@ -2100,7 +2088,7 @@ export const ProductionPlanning: React.FC = () => {
               </FormControl>
 
               <TextField
-                label="Target Start Date"
+                label="Start Date"
                 type="date"
                 fullWidth
                 required
@@ -2110,7 +2098,7 @@ export const ProductionPlanning: React.FC = () => {
               />
 
               <TextField
-                label="Start Hour of Day (0 - 23)"
+                label="Start Hour (0 - 23)"
                 type="number"
                 slotProps={{ htmlInput: { min: 0, max: 23 } }}
                 fullWidth
@@ -2133,18 +2121,18 @@ export const ProductionPlanning: React.FC = () => {
                       Schedule as Simulated "What-If" Draft
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Simulated jobs do not lock the calendar until saved.
+                      Simulated jobs do not alter live timelines until promoted.
                     </Typography>
                   </Box>
                 }
               />
             </Stack>
           </DialogContent>
-          <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <Button onClick={() => setIsScheduleDialogOpen(false)} color="inherit">
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setIsScheduleDialogOpen(false)} variant="outlined" sx={{ borderRadius: '8px' }}>
               Cancel
             </Button>
-            <Button type="submit" variant="contained" color="secondary" disabled={createPlanMutation.isPending}>
+            <Button type="submit" variant="contained" color="secondary" disabled={createPlanMutation.isPending} sx={{ borderRadius: '8px', fontWeight: 700 }}>
               Confirm Schedule
             </Button>
           </DialogActions>
@@ -2162,67 +2150,60 @@ export const ProductionPlanning: React.FC = () => {
         slotProps={{
           paper: {
             sx: {
-              bgcolor: '#0f172a',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
               borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              p: 1
             }
           }
         }}
       >
-        <DialogTitle sx={{ fontWeight: 800, color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <DialogTitle sx={{ fontWeight: 800, color: '#0f172a', pb: 1 }}>
           Log Hourly Output
         </DialogTitle>
         <form onSubmit={handleSaveHourlyLogs}>
-          <DialogContent sx={{ p: 3 }}>
+          <DialogContent sx={{ pt: 1 }}>
             {selectedPlan && (
-              <Stack spacing={2} sx={{ mb: 3 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              <Box sx={{ mb: 2.5, p: 2, bgcolor: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a' }}>
                   Order: {getOrderLabel(selectedPlan.orderId)}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Machine: {getMachineName(selectedPlan.machineId)}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Planned Target Hourly Capacity: <strong>{selectedPlan.plannedHourlyRate} units/hr</strong>
+                <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 700, display: 'block', mt: 0.5 }}>
+                  Target Capacity: {selectedPlan.plannedHourlyRate} units/hr
                 </Typography>
-              </Stack>
+              </Box>
             )}
 
-            <Divider sx={{ mb: 3, borderColor: 'rgba(255,255,255,0.06)' }} />
-
-            <Stack spacing={3} sx={{ maxHeight: 350, overflowY: 'auto', pr: 1 }}>
+            <Stack spacing={2} sx={{ maxHeight: 350, overflowY: 'auto', pr: 0.5 }}>
               {Object.keys(hourlyLogsForm).map((hourStr) => {
                 const hour = Number(hourStr);
                 return (
-                  <Grid container spacing={2} sx={{ alignItems: 'center' }} key={hour}>
-                    <Grid size={4}>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                        {String(hour).padStart(2, '0')}:00 - {String(hour + 1).padStart(2, '0')}:00
-                      </Typography>
-                    </Grid>
-                    <Grid size={8}>
-                      <TextField
-                        label="Actual Output Volume (units)"
-                        type="number"
-                        size="small"
-                        fullWidth
-                        value={hourlyLogsForm[hour]}
-                        onChange={(e) => setHourlyLogsForm({
-                          ...hourlyLogsForm,
-                          [hour]: Number(e.target.value)
-                        })}
-                      />
-                    </Grid>
-                  </Grid>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }} key={hour}>
+                    <Typography variant="body2" sx={{ fontWeight: 700, minWidth: 90, color: '#475569' }}>
+                      {String(hour).padStart(2, '0')}:00 - {String(hour + 1).padStart(2, '0')}:00
+                    </Typography>
+                    <TextField
+                      label="Actual Volume"
+                      type="number"
+                      size="small"
+                      value={hourlyLogsForm[hour]}
+                      onChange={(e) => setHourlyLogsForm({
+                        ...hourlyLogsForm,
+                        [hour]: Number(e.target.value)
+                      })}
+                    />
+                  </Box>
                 );
               })}
             </Stack>
           </DialogContent>
-          <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <Button onClick={() => setIsHourlyLogOpen(false)} color="inherit">
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setIsHourlyLogOpen(false)} variant="outlined" sx={{ borderRadius: '8px' }}>
               Cancel
             </Button>
-            <Button type="submit" variant="contained" color="secondary" disabled={logHourlyMutation.isPending}>
+            <Button type="submit" variant="contained" color="secondary" disabled={logHourlyMutation.isPending} sx={{ borderRadius: '8px', fontWeight: 700 }}>
               Save Hourly Logs
             </Button>
           </DialogActions>
@@ -2232,10 +2213,10 @@ export const ProductionPlanning: React.FC = () => {
       {/* Snackbar alerts */}
       <Snackbar
         open={notification.open}
-        autoHideDuration={5000}
+        autoHideDuration={4000}
         onClose={() => setNotification(prev => ({ ...prev, open: false }))}
       >
-        <Alert severity={notification.severity} variant="filled" sx={{ width: '100%' }}>
+        <Alert severity={notification.severity} variant="filled" sx={{ width: '100%', borderRadius: '10px' }}>
           {notification.message}
         </Alert>
       </Snackbar>

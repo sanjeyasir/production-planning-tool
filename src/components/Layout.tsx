@@ -20,7 +20,7 @@ import {
   Menu,
   MenuItem,
   Tooltip,
-  Badge,
+  Chip,
   useTheme,
   useMediaQuery,
   BottomNavigation,
@@ -44,6 +44,8 @@ import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import FactoryIcon from '@mui/icons-material/Factory';
 import HomeIcon from '@mui/icons-material/Home';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import LockResetIcon from '@mui/icons-material/LockReset';
+import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 
 const DRAWER_WIDTH = 260;
 const COLLAPSED_DRAWER_WIDTH = 70;
@@ -93,50 +95,50 @@ export const Layout: React.FC = () => {
     {
       title: 'Portal Overview',
       path: '/',
-      icon: <HomeIcon />,
+      icon: <HomeIcon fontSize="small" />,
     },
     {
-      title: 'Dashboard',
+      title: 'Analytics & Dashboards',
       subheader: true,
-    },
-    {
-      title: 'Downtime Analytics',
-      path: '/downtime-dashboard',
-      icon: <DashboardIcon />,
-      module: 'downtime',
-      action: 'view',
     },
     {
       title: 'Production Analytics',
       path: '/production-dashboard',
-      icon: <BarChartIcon />,
+      icon: <BarChartIcon fontSize="small" />,
       module: 'production',
       action: 'view',
     },
     {
-      title: 'Operations',
-      subheader: true,
-    },
-    {
-      title: 'Enter Downtime',
-      path: '/downtime-entry',
-      icon: <PlaylistAddIcon />,
+      title: 'Downtime Analytics',
+      path: '/downtime-dashboard',
+      icon: <DashboardIcon fontSize="small" />,
       module: 'downtime',
-      action: 'create',
+      action: 'view',
     },
     {
-      title: 'Enter Production',
-      path: '/production-entry',
-      icon: <PrecisionManufacturingIcon />,
-      module: 'production',
-      action: 'create',
+      title: 'Planning & Operations',
+      subheader: true,
     },
     {
       title: 'Production Planning',
       path: '/production-planning',
-      icon: <CalendarMonthIcon />,
+      icon: <CalendarMonthIcon fontSize="small" />,
       module: 'production',
       action: 'view',
+    },
+    {
+      title: 'Enter Production',
+      path: '/production-entry',
+      icon: <PrecisionManufacturingIcon fontSize="small" />,
+      module: 'production',
+      action: 'create',
+    },
+    {
+      title: 'Enter Downtime',
+      path: '/downtime-entry',
+      icon: <PlaylistAddIcon fontSize="small" />,
+      module: 'downtime',
+      action: 'create',
     },
     {
       title: 'Administration',
@@ -144,9 +146,17 @@ export const Layout: React.FC = () => {
       adminOnly: true,
     },
     {
+      title: 'Users Management',
+      path: '/users',
+      icon: <PeopleIcon fontSize="small" />,
+      module: 'user',
+      action: 'view',
+      adminOnly: true,
+    },
+    {
       title: 'Plants Master',
       path: '/plants',
-      icon: <BusinessIcon />,
+      icon: <BusinessIcon fontSize="small" />,
       module: 'master',
       action: 'view',
       adminOnly: true,
@@ -154,7 +164,7 @@ export const Layout: React.FC = () => {
     {
       title: 'Machines Master',
       path: '/machines',
-      icon: <FactoryIcon />,
+      icon: <FactoryIcon fontSize="small" />,
       module: 'master',
       action: 'view',
       adminOnly: true,
@@ -162,16 +172,8 @@ export const Layout: React.FC = () => {
     {
       title: 'Categories Master',
       path: '/categories',
-      icon: <CategoryIcon />,
+      icon: <CategoryIcon fontSize="small" />,
       module: 'master',
-      action: 'view',
-      adminOnly: true,
-    },
-    {
-      title: 'Users Management',
-      path: '/users',
-      icon: <PeopleIcon />,
-      module: 'user',
       action: 'view',
       adminOnly: true,
     },
@@ -194,23 +196,25 @@ export const Layout: React.FC = () => {
     return true;
   });
 
-  // Mobile Bottom Navigation items (Top 4 shortcuts)
+  // Mobile Bottom Navigation items
   const mobileShortcuts = [
-    { label: 'Downtime', icon: <DashboardIcon />, path: '/downtime-dashboard' },
+    { label: 'Overview', icon: <HomeIcon />, path: '/' },
     { label: 'Production', icon: <BarChartIcon />, path: '/production-dashboard' },
-    { label: 'Log DT', icon: <PlaylistAddIcon />, path: '/downtime-entry' },
-    { label: 'Log Prod', icon: <PrecisionManufacturingIcon />, path: '/production-entry' },
+    { label: 'Planning', icon: <CalendarMonthIcon />, path: '/production-planning' },
+    { label: 'Downtime', icon: <DashboardIcon />, path: '/downtime-dashboard' },
+    { label: 'Menu', icon: <MoreHorizIcon />, path: 'MENU_TRIGGER' },
   ];
 
   const getActiveMobileNavIndex = () => {
     const idx = mobileShortcuts.findIndex(s => s.path === location.pathname);
-    return idx === -1 ? 0 : idx;
+    return idx === -1 ? (mobileOpen ? 4 : 0) : idx;
   };
 
   const currentDrawerWidth = open ? DRAWER_WIDTH : COLLAPSED_DRAWER_WIDTH;
 
   const sidebarContent = (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#ffffff', color: '#0f172a' }}>
+      {/* Brand Header */}
       <Box
         sx={{
           height: 64,
@@ -218,46 +222,52 @@ export const Layout: React.FC = () => {
           alignItems: 'center',
           justifyContent: open ? 'space-between' : 'center',
           px: open ? 2.5 : 1,
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          borderBottom: '1px solid #e2e8f0',
         }}
       >
         {open ? (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Box
+            <Avatar
               sx={{
-                bgcolor: 'primary.main',
-                borderRadius: 1.5,
-                p: 0.8,
-                display: 'flex',
-                boxShadow: '0 0 12px rgba(99, 102, 241, 0.4)',
+                bgcolor: '#10b981',
+                width: 36,
+                height: 36,
+                borderRadius: '10px',
+                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.25)',
               }}
             >
               <PrecisionManufacturingIcon sx={{ color: '#fff', fontSize: 20 }} />
+            </Avatar>
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1.1, fontSize: '0.95rem' }}>
+                MOIP Ops
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.65rem', letterSpacing: '0.06em', fontWeight: 600 }}>
+                MANUFACTURING HUB
+              </Typography>
             </Box>
-            <Typography variant="h6" color="primary.main" sx={{ fontWeight: 800, letterSpacing: 1.2 }}>
-              MOIP
-            </Typography>
           </Box>
         ) : (
-          <Box
+          <Avatar
             sx={{
-              bgcolor: 'primary.main',
-              borderRadius: 1.5,
-              p: 0.8,
-              display: 'flex',
+              bgcolor: '#10b981',
+              width: 36,
+              height: 36,
+              borderRadius: '10px',
             }}
           >
             <PrecisionManufacturingIcon sx={{ color: '#fff', fontSize: 20 }} />
-          </Box>
+          </Avatar>
         )}
         {isDesktop && open && (
-          <IconButton onClick={handleDrawerToggle} size="small" sx={{ color: 'text.secondary' }}>
+          <IconButton onClick={handleDrawerToggle} size="small" sx={{ color: '#64748b' }}>
             <ChevronLeftIcon />
           </IconButton>
         )}
       </Box>
 
-      <List sx={{ px: 1.5, py: 2, flexGrow: 1, overflowY: 'auto' }}>
+      {/* Navigation List */}
+      <List sx={{ px: 1.25, py: 1.5, flexGrow: 1, overflowY: 'auto' }}>
         {filteredMenuItems.map((item, index) => {
           if (item.subheader) {
             return open ? (
@@ -266,43 +276,44 @@ export const Layout: React.FC = () => {
                 variant="caption"
                 sx={{
                   display: 'block',
-                  px: 2,
+                  px: 1.5,
                   mt: 2,
-                  mb: 0.8,
-                  color: 'text.disabled',
+                  mb: 0.6,
+                  color: '#94a3b8',
                   fontWeight: 700,
                   textTransform: 'uppercase',
-                  letterSpacing: 1,
+                  fontSize: '0.675rem',
+                  letterSpacing: '0.08em',
                 }}
               >
                 {item.title}
               </Typography>
             ) : (
-              <Divider key={`div-${index}`} sx={{ my: 2, borderColor: 'rgba(255,255,255,0.04)' }} />
+              <Divider key={`div-${index}`} sx={{ my: 1.5, borderColor: '#f1f5f9' }} />
             );
           }
 
           const isActive = location.pathname === item.path;
           
           return (
-            <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
+            <ListItem key={item.path} disablePadding sx={{ mb: 0.4 }}>
               <ListItemButton
                 onClick={() => {
                   navigate(item.path || '/');
                   if (!isDesktop) setMobileOpen(false);
                 }}
                 sx={{
-                  borderRadius: 2.5,
-                  minHeight: 48,
+                  borderRadius: '10px',
+                  minHeight: 42,
                   justifyContent: open ? 'initial' : 'center',
-                  px: 2,
+                  px: open ? 1.5 : 1,
                   bgcolor: isActive ? 'rgba(99, 102, 241, 0.08)' : 'transparent',
-                  border: isActive ? '1px solid rgba(99, 102, 241, 0.15)' : '1px solid transparent',
-                  color: isActive ? 'primary.light' : 'text.secondary',
-                  transition: 'all 0.2s',
+                  border: isActive ? '1px solid rgba(99, 102, 241, 0.18)' : '1px solid transparent',
+                  color: isActive ? '#4f46e5' : '#475569',
+                  transition: 'all 0.15s ease',
                   '&:hover': {
-                    bgcolor: 'rgba(255, 255, 255, 0.03)',
-                    color: 'text.primary',
+                    bgcolor: isActive ? 'rgba(99, 102, 241, 0.12)' : '#f8fafc',
+                    color: '#0f172a',
                   },
                 }}
               >
@@ -310,17 +321,24 @@ export const Layout: React.FC = () => {
                   <ListItemIcon
                     sx={{
                       minWidth: 0,
-                      mr: open ? 2 : 'auto',
+                      mr: open ? 1.5 : 'auto',
                       justifyContent: 'center',
-                      color: isActive ? 'primary.main' : 'text.secondary',
+                      color: isActive ? '#6366f1' : '#64748b',
                     }}
                   >
                     {item.icon}
                   </ListItemIcon>
                 </Tooltip>
-                 {open && (
+                {open && (
                   <ListItemText>
-                    <Typography variant="body2" sx={{ fontSize: '0.925rem', fontWeight: isActive ? 600 : 500 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontSize: '0.875rem',
+                        fontWeight: isActive ? 700 : 500,
+                        color: isActive ? '#4f46e5' : '#334155',
+                      }}
+                    >
                       {item.title}
                     </Typography>
                   </ListItemText>
@@ -331,57 +349,59 @@ export const Layout: React.FC = () => {
         })}
       </List>
 
+      {/* User Footer Profile */}
       <Box
         sx={{
-          p: open ? 2.5 : 1,
-          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-          bgcolor: 'rgba(255, 255, 255, 0.01)',
+          p: open ? 2 : 1,
+          borderTop: '1px solid #e2e8f0',
+          bgcolor: '#ffffff',
           display: 'flex',
           flexDirection: 'column',
           alignItems: open ? 'stretch' : 'center',
-          gap: 1,
+          gap: 1.2,
         }}
       >
         {open ? (
           <>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
               <Avatar
                 sx={{
-                  bgcolor: 'primary.dark',
-                  width: 38,
-                  height: 38,
-                  fontSize: '0.95rem',
-                  fontWeight: 600,
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+                  bgcolor: '#10b981',
+                  width: 36,
+                  height: 36,
+                  fontSize: '0.875rem',
+                  fontWeight: 700,
                 }}
               >
                 {profile?.name?.charAt(0).toUpperCase() || 'U'}
               </Avatar>
-              <Box sx={{ overflow: 'hidden' }}>
-                <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
-                  {profile?.name}
+              <Box sx={{ overflow: 'hidden', flexGrow: 1 }}>
+                <Typography variant="body2" noWrap sx={{ fontWeight: 700, color: '#0f172a', fontSize: '0.85rem' }}>
+                  {profile?.name || 'User'}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-                  {role?.name}
+                <Typography variant="caption" noWrap sx={{ display: 'block', color: '#64748b', fontSize: '0.725rem' }}>
+                  {role?.name || profile?.email}
                 </Typography>
               </Box>
             </Box>
             <Button
               variant="outlined"
               color="error"
+              size="small"
               onClick={handleLogout}
-              startIcon={<ExitToAppIcon />}
+              startIcon={<ExitToAppIcon sx={{ fontSize: 16 }} />}
               fullWidth
               sx={{
-                mt: 1.5,
                 borderRadius: '8px',
                 borderColor: 'rgba(239, 68, 68, 0.2)',
-                bgcolor: 'rgba(239, 68, 68, 0.02)',
+                bgcolor: 'rgba(239, 68, 68, 0.04)',
                 textTransform: 'none',
-                fontWeight: 500,
+                fontWeight: 600,
+                fontSize: '0.8rem',
+                py: 0.6,
                 '&:hover': {
                   borderColor: 'error.main',
-                  bgcolor: 'rgba(239, 68, 68, 0.08)',
+                  bgcolor: 'rgba(239, 68, 68, 0.1)',
                 },
               }}
             >
@@ -389,16 +409,18 @@ export const Layout: React.FC = () => {
             </Button>
           </>
         ) : (
-          <IconButton color="error" onClick={handleLogout} sx={{ borderRadius: 2 }}>
-            <ExitToAppIcon />
-          </IconButton>
+          <Tooltip title="Sign Out" placement="right">
+            <IconButton color="error" onClick={handleLogout} size="small" sx={{ borderRadius: 2 }}>
+              <ExitToAppIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         )}
       </Box>
     </Box>
   );
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: '#f8fafc' }}>
       {/* Top AppBar */}
       <AppBar
         position="fixed"
@@ -406,82 +428,94 @@ export const Layout: React.FC = () => {
         sx={{
           width: isDesktop ? `calc(100% - ${currentDrawerWidth}px)` : '100%',
           ml: isDesktop ? `${currentDrawerWidth}px` : 0,
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-          bgcolor: 'background.default',
-          backdropFilter: 'blur(20px)',
+          borderBottom: '1px solid #e2e8f0',
+          bgcolor: 'rgba(255, 255, 255, 0.85)',
+          backdropFilter: 'blur(12px)',
+          color: '#0f172a',
           transition: theme.transitions.create(['width', 'margin'], {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.leavingScreen,
           }),
         }}
       >
-        <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 3 } }}>
+        <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 3 }, minHeight: '64px !important' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             {!isDesktop && (
-              <IconButton color="inherit" aria-label="open drawer" edge="start" onClick={handleDrawerToggle} sx={{ mr: 1 }}>
-                <MenuIcon />
+              <IconButton color="inherit" aria-label="open drawer" edge="start" onClick={handleDrawerToggle} sx={{ mr: 0.5 }}>
+                <MenuIcon sx={{ color: '#0f172a' }} />
               </IconButton>
             )}
             
             {isDesktop && !open && (
-              <IconButton onClick={handleDrawerToggle} size="small" sx={{ mr: 1, color: 'text.secondary' }}>
+              <IconButton onClick={handleDrawerToggle} size="small" sx={{ mr: 1, color: '#64748b' }}>
                 <ChevronRightIcon />
               </IconButton>
             )}
 
+            {/* Brand Header Display */}
+            <Typography
+              variant="subtitle1"
+              sx={{
+                fontWeight: 800,
+                color: '#10b981',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                letterSpacing: '-0.01em',
+                fontSize: { xs: '1rem', sm: '1.1rem' }
+              }}
+            >
+              <PrecisionManufacturingIcon sx={{ fontSize: 20 }} />
+              {!isMobile ? 'MOIP Operations Hub' : 'MOIP'}
+            </Typography>
+
             {/* Tenant Display */}
             {tenant && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
-                <Box
-                  sx={{
-                    bgcolor: 'rgba(16, 185, 129, 0.1)',
-                    color: 'secondary.light',
-                    borderRadius: '8px',
-                    px: 1.5,
-                    py: 0.5,
-                    border: '1px solid rgba(16, 185, 129, 0.2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                  }}
-                >
-                  <FactoryIcon sx={{ fontSize: 16 }} />
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {tenant.companyName}
-                  </Typography>
-                </Box>
-                <Badge
-                  badgeContent={role?.name}
-                  color={
-                    role?.name === 'Super Admin' || role?.name === 'Tenant Admin' ? 'primary' : 'secondary'
-                  }
-                  sx={{
-                    '& .MuiBadge-badge': {
-                      fontSize: '0.675rem',
-                      fontWeight: 700,
-                      height: 18,
-                      position: 'static',
-                      transform: 'none',
-                      px: 1,
-                      borderRadius: 1,
-                    },
-                  }}
-                />
-              </Box>
+              <Chip
+                icon={<FactoryIcon sx={{ fontSize: '15px !important', color: '#10b981 !important' }} />}
+                label={tenant.companyName}
+                size="small"
+                variant="outlined"
+                sx={{
+                  color: '#059669',
+                  borderColor: 'rgba(16, 185, 129, 0.3)',
+                  bgcolor: 'rgba(16, 185, 129, 0.06)',
+                  fontWeight: 600,
+                  fontSize: '0.75rem',
+                  display: { xs: 'none', sm: 'inline-flex' }
+                }}
+              />
             )}
           </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            {/* Role Chip */}
+            {role?.name && (
+              <Chip
+                label={role.name.toUpperCase()}
+                size="small"
+                sx={{
+                  bgcolor: role?.name === 'Super Admin' || role?.name === 'Tenant Admin' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(99, 102, 241, 0.1)',
+                  color: role?.name === 'Super Admin' || role?.name === 'Tenant Admin' ? '#dc2626' : '#4f46e5',
+                  fontWeight: 700,
+                  fontSize: '0.675rem',
+                  letterSpacing: '0.04em',
+                  display: { xs: 'none', sm: 'inline-flex' }
+                }}
+              />
+            )}
+
             {/* Quick Profile access */}
-            <Tooltip title="User Profile">
+            <Tooltip title="User Profile Menu">
               <IconButton onClick={handleProfileMenuOpen} sx={{ p: 0.5 }}>
                 <Avatar
                   sx={{
-                    bgcolor: 'primary.main',
-                    width: 32,
-                    height: 32,
+                    bgcolor: '#10b981',
+                    width: 34,
+                    height: 34,
                     fontSize: '0.85rem',
-                    fontWeight: 600,
+                    fontWeight: 700,
+                    boxShadow: '0 2px 6px rgba(16, 185, 129, 0.25)',
                   }}
                 >
                   {profile?.name?.charAt(0).toUpperCase() || 'U'}
@@ -492,25 +526,46 @@ export const Layout: React.FC = () => {
               anchorEl={anchorEl}
               open={Boolean(anchorEl)}
               onClose={handleProfileMenuClose}
-              elevation={8}
+              elevation={4}
               slotProps={{
                 paper: {
                   sx: {
                     mt: 1.5,
-                    minWidth: 200,
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    bgcolor: '#0f172a',
-                    backgroundImage: 'none',
+                    minWidth: 220,
+                    border: '1px solid #e2e8f0',
+                    bgcolor: '#ffffff',
+                    borderRadius: '12px',
+                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.08)',
                   },
                 },
               }}
             >
               <Box sx={{ px: 2, py: 1.5 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{profile?.name}</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>{profile?.email}</Typography>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#0f172a' }}>
+                  {profile?.name || 'User'}
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.75rem', display: 'block' }}>
+                  {profile?.email}
+                </Typography>
+                <Chip
+                  label={role?.name || 'Viewer'}
+                  size="small"
+                  sx={{ mt: 1, height: 20, fontSize: '0.65rem', fontWeight: 600, bgcolor: 'rgba(99, 102, 241, 0.08)', color: '#4f46e5' }}
+                />
               </Box>
-              <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)' }} />
-              <MenuItem onClick={handleLogout} sx={{ color: 'error.light', py: 1.2 }}>
+              <Divider sx={{ borderColor: '#f1f5f9' }} />
+              <MenuItem
+                onClick={() => {
+                  handleProfileMenuClose();
+                  navigate('/change-password');
+                }}
+                sx={{ fontSize: '0.85rem', py: 1, color: '#334155' }}
+              >
+                <LockResetIcon sx={{ fontSize: 18, mr: 1.5, color: '#64748b' }} />
+                Change Password
+              </MenuItem>
+              <Divider sx={{ borderColor: '#f1f5f9' }} />
+              <MenuItem onClick={handleLogout} sx={{ color: '#ef4444', fontSize: '0.85rem', py: 1 }}>
                 <ExitToAppIcon sx={{ fontSize: 18, mr: 1.5 }} />
                 Sign Out
               </MenuItem>
@@ -535,6 +590,8 @@ export const Layout: React.FC = () => {
                 duration: theme.transitions.duration.enteringScreen,
               }),
               overflowX: 'hidden',
+              borderRight: '1px solid #e2e8f0',
+              bgcolor: '#ffffff',
             },
           }}
         >
@@ -545,13 +602,18 @@ export const Layout: React.FC = () => {
         <Drawer
           variant="temporary"
           open={mobileOpen}
-          onClose={handleDrawerToggle}
+          onClose={() => setMobileOpen(false)}
           ModalProps={{
-            keepMounted: true, // Better open performance on mobile.
+            keepMounted: true,
           }}
           sx={{
             display: { xs: 'block', md: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: DRAWER_WIDTH },
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: DRAWER_WIDTH,
+              borderRight: '1px solid #e2e8f0',
+              bgcolor: '#ffffff',
+            },
           }}
         >
           {sidebarContent}
@@ -563,13 +625,14 @@ export const Layout: React.FC = () => {
         component="main"
         sx={{
           flexGrow: 1,
-          p: { xs: 2.5, md: 4 },
+          p: { xs: 2, sm: 2.5, md: 3.5 },
           width: isDesktop ? `calc(100% - ${currentDrawerWidth}px)` : '100%',
           minHeight: '100vh',
           display: 'flex',
           flexDirection: 'column',
           mt: 8,
           pb: isMobile ? 10 : 4, // Padding at bottom for mobile nav bar
+          bgcolor: '#f8fafc',
         }}
       >
         <Outlet />
@@ -577,17 +640,48 @@ export const Layout: React.FC = () => {
 
       {/* Mobile Bottom Navigation */}
       {isMobile && (
-        <Paper sx={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 1000 }} elevation={10}>
+        <Paper
+          sx={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 1000,
+            borderTop: '1px solid #e2e8f0',
+            bgcolor: '#ffffff',
+          }}
+          elevation={8}
+        >
           <BottomNavigation
             showLabels
             value={getActiveMobileNavIndex()}
             onChange={(_, newValue) => {
-              navigate(mobileShortcuts[newValue].path);
+              const item = mobileShortcuts[newValue];
+              if (item.path === 'MENU_TRIGGER') {
+                setMobileOpen(true);
+              } else {
+                navigate(item.path);
+              }
             }}
             sx={{
-              bgcolor: '#0f172a',
-              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-              height: 64,
+              bgcolor: '#ffffff',
+              height: 58,
+              '& .MuiBottomNavigationAction-root': {
+                minWidth: 'auto',
+                padding: '6px 0',
+                color: '#64748b',
+                '&.Mui-selected': {
+                  color: '#6366f1',
+                },
+              },
+              '& .MuiBottomNavigationAction-label': {
+                fontSize: '0.675rem',
+                fontWeight: 600,
+                mt: 0.2,
+                '&.Mui-selected': {
+                  fontSize: '0.7rem',
+                },
+              },
             }}
           >
             {mobileShortcuts.map((shortcut, index) => (
@@ -595,16 +689,6 @@ export const Layout: React.FC = () => {
                 key={index}
                 label={shortcut.label}
                 icon={shortcut.icon}
-                sx={{
-                  color: 'text.secondary',
-                  '&.Mui-selected': {
-                    color: 'primary.main',
-                  },
-                  '& .MuiBottomNavigationAction-label': {
-                    fontSize: '0.725rem',
-                    mt: 0.5,
-                  },
-                }}
               />
             ))}
           </BottomNavigation>

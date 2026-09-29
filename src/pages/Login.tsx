@@ -22,8 +22,14 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  InputAdornment,
+  IconButton,
 } from '@mui/material';
 import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturing';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import EmailIcon from '@mui/icons-material/Email';
+import LockIcon from '@mui/icons-material/Lock';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -31,6 +37,7 @@ export const Login: React.FC = () => {
   const { user, loading, profile } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -154,7 +161,7 @@ export const Login: React.FC = () => {
     } catch (err: any) {
       setSubmitting(false);
       if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        setError('Invalid email or password');
+        setError('Invalid email or password. Please verify credentials.');
       } else {
         setError(err.message || 'Failed to sign in');
       }
@@ -162,162 +169,277 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', bgcolor: '#080c14', px: 2 }}>
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        background: 'radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.05) 0%, transparent 50%), #f8fafc',
+        px: 2.5,
+        py: 4,
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Ambient Blur Glows */}
+      <Box
+        sx={{
+          position: 'absolute',
+          width: 320,
+          height: 320,
+          borderRadius: '50%',
+          filter: 'blur(90px)',
+          background: 'rgba(99, 102, 241, 0.08)',
+          top: '-10%',
+          left: '5%',
+          zIndex: 0,
+        }}
+      />
+      <Box
+        sx={{
+          position: 'absolute',
+          width: 400,
+          height: 400,
+          borderRadius: '50%',
+          filter: 'blur(100px)',
+          background: 'rgba(16, 185, 129, 0.06)',
+          bottom: '-10%',
+          right: '5%',
+          zIndex: 0,
+        }}
+      />
+
       <Card
         sx={{
-          maxWidth: 420,
+          maxWidth: 440,
           width: '100%',
-          p: 2,
-          borderRadius: '24px',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.6) 0%, rgba(8, 12, 21, 0.9) 100%)',
-          backdropFilter: 'blur(20px)',
-          boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.5)',
+          borderRadius: '20px',
+          border: '1px solid #e2e8f0',
+          bgcolor: '#ffffff',
+          boxShadow: '0 10px 30px rgba(0, 0, 0, 0.05)',
+          zIndex: 1,
+          p: { xs: 2.5, sm: 3.5 },
         }}
       >
-        <CardContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 4 }}>
+        <CardContent sx={{ p: '0 !important' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', mb: 3.5 }}>
             <Box
               sx={{
-                bgcolor: 'primary.main',
+                bgcolor: '#10b981',
                 borderRadius: '16px',
-                p: 1.2,
+                p: 1.5,
                 display: 'flex',
-                boxShadow: '0 0 20px rgba(99, 102, 241, 0.4)',
+                boxShadow: '0 4px 14px rgba(16, 185, 129, 0.25)',
                 mb: 2,
               }}
             >
               <PrecisionManufacturingIcon sx={{ color: '#fff', fontSize: 32 }} />
             </Box>
-            <Typography variant="h4" sx={{ fontWeight: 800, color: '#fff', letterSpacing: 0.5 }}>
-              MOIP
+            <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', fontSize: '1.45rem' }}>
+              MOIP Operations Hub
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            <Typography variant="body2" sx={{ color: '#64748b', mt: 0.5, fontSize: '0.85rem' }}>
               Manufacturing Operations Intelligence Platform
             </Typography>
           </Box>
 
           {error && (
-            <Alert severity="error" sx={{ mb: 3, borderRadius: '8px' }}>
+            <Alert severity="error" sx={{ mb: 2.5, borderRadius: '10px' }}>
               {error}
             </Alert>
           )}
 
           <form onSubmit={handleLogin}>
-            <Stack spacing={2.5}>
-              <TextField
-                label="Email Address"
-                type="email"
-                required
-                fullWidth
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={submitting}
-              />
-              <TextField
-                label="Password"
-                type="password"
-                required
-                fullWidth
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={submitting}
-              />
+            <Stack spacing={2.25}>
+              <Box>
+                <Typography variant="caption" sx={{ fontWeight: 600, color: '#475569', mb: 0.75, display: 'block' }}>
+                  Email Address
+                </Typography>
+                <TextField
+                  placeholder="admin@gmail.com"
+                  type="email"
+                  required
+                  fullWidth
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={submitting}
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <EmailIcon sx={{ color: '#94a3b8', fontSize: 20 }} />
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                />
+              </Box>
+
+              <Box>
+                <Typography variant="caption" sx={{ fontWeight: 600, color: '#475569', mb: 0.75, display: 'block' }}>
+                  Password
+                </Typography>
+                <TextField
+                  placeholder="••••••••"
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  fullWidth
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={submitting}
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <LockIcon sx={{ color: '#94a3b8', fontSize: 20 }} />
+                        </InputAdornment>
+                      ),
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            size="small"
+                            onClick={() => setShowPassword(!showPassword)}
+                            edge="end"
+                            sx={{ color: '#94a3b8' }}
+                          >
+                            {showPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                />
+              </Box>
+
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Button
+                  onClick={() => {
+                    setForgotError('');
+                    setForgotSuccess('');
+                    setForgotEmail('');
+                    setForgotOpen(true);
+                  }}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    fontSize: '0.8rem',
+                    color: '#6366f1',
+                    p: 0,
+                    minWidth: 'auto',
+                    '&:hover': { background: 'transparent', textDecoration: 'underline' },
+                  }}
+                >
+                  Forgot Password?
+                </Button>
+              </Box>
+
               <Button
                 type="submit"
                 variant="contained"
                 size="large"
                 fullWidth
                 disabled={submitting}
-                sx={{ py: 1.4, fontSize: '0.95rem', fontWeight: 700 }}
+                sx={{
+                  py: 1.3,
+                  fontSize: '0.95rem',
+                  fontWeight: 700,
+                  borderRadius: '10px',
+                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                  boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)',
+                  '&:hover': {
+                    background: 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)',
+                  },
+                }}
               >
                 {submitting ? <CircularProgress size={24} color="inherit" /> : 'Sign In'}
               </Button>
             </Stack>
           </form>
 
-          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
-            <Button
-              onClick={() => {
-                setForgotError('');
-                setForgotSuccess('');
-                setForgotEmail('');
-                setForgotOpen(true);
-              }}
-              sx={{
-                textTransform: 'none',
-                fontWeight: 600,
-                color: 'primary.light',
-                fontSize: '0.875rem',
-              }}
-            >
-              Forgot Password?
-            </Button>
+          {/* Quick Demo Credentials Info */}
+          <Box
+            sx={{
+              mt: 3,
+              p: 1.5,
+              borderRadius: '10px',
+              bgcolor: '#f8fafc',
+              border: '1px dashed #cbd5e1',
+              textAlign: 'center',
+            }}
+          >
+            <Typography variant="caption" sx={{ color: '#64748b', display: 'block', fontWeight: 600 }}>
+              Default Administrator: <strong>admin@gmail.com</strong> / <strong>admin123</strong>
+            </Typography>
           </Box>
         </CardContent>
       </Card>
 
+      {/* Forgot Password Dialog */}
       <Dialog
         open={forgotOpen}
-        onClose={() => !forgotLoading && setForgotOpen(false)}
-        fullWidth
+        onClose={() => setForgotOpen(false)}
         maxWidth="xs"
+        fullWidth
         slotProps={{
           paper: {
             sx: {
               borderRadius: '16px',
-              bgcolor: '#0f172a',
-              backgroundImage: 'none',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-            }
-          }
+              border: '1px solid #e2e8f0',
+              p: 1,
+            },
+          },
         }}
       >
+        <DialogTitle sx={{ fontWeight: 800, color: '#0f172a', pb: 1 }}>
+          Reset Password
+        </DialogTitle>
         <form onSubmit={handleForgotSubmit}>
-          <DialogTitle sx={{ fontWeight: 700, color: '#fff' }}>Request Password Reset</DialogTitle>
-          <DialogContent>
-            <Stack spacing={2} sx={{ mt: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                Enter your registered email address. Your administrator will be notified to reset your password.
-              </Typography>
-              
-              {forgotError && (
-                <Alert severity="error" sx={{ borderRadius: '8px' }}>
-                  {forgotError}
-                </Alert>
-              )}
-              {forgotSuccess && (
-                <Alert severity="success" sx={{ borderRadius: '8px' }}>
-                  {forgotSuccess}
-                </Alert>
-              )}
+          <DialogContent sx={{ pt: 1 }}>
+            <Typography variant="body2" sx={{ color: '#64748b', mb: 2 }}>
+              Enter your account email. Your request will be queued for the system administrator to generate a secure reset link.
+            </Typography>
 
-              <TextField
-                label="Email Address"
-                type="email"
-                required
-                fullWidth
-                value={forgotEmail}
-                onChange={(e) => setForgotEmail(e.target.value)}
-                disabled={forgotLoading}
-              />
-            </Stack>
+            {forgotError && (
+              <Alert severity="error" sx={{ mb: 2, borderRadius: '8px' }}>
+                {forgotError}
+              </Alert>
+            )}
+            {forgotSuccess && (
+              <Alert severity="success" sx={{ mb: 2, borderRadius: '8px' }}>
+                {forgotSuccess}
+              </Alert>
+            )}
+
+            <TextField
+              label="Email Address"
+              type="email"
+              required
+              fullWidth
+              value={forgotEmail}
+              onChange={(e) => setForgotEmail(e.target.value)}
+              disabled={forgotLoading || !!forgotSuccess}
+            />
           </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button 
-              onClick={() => setForgotOpen(false)} 
-              color="inherit"
+          <DialogActions sx={{ px: 3, pb: 2.5 }}>
+            <Button
+              onClick={() => setForgotOpen(false)}
               disabled={forgotLoading}
+              variant="outlined"
+              sx={{ borderRadius: '8px', textTransform: 'none' }}
             >
-              Close
+              Cancel
             </Button>
-            <Button 
-              type="submit" 
-              variant="contained"
-              disabled={forgotLoading}
-            >
-              {forgotLoading ? <CircularProgress size={24} color="inherit" /> : 'Submit Request'}
-            </Button>
+            {!forgotSuccess && (
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={forgotLoading}
+                sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 700 }}
+              >
+                {forgotLoading ? <CircularProgress size={20} color="inherit" /> : 'Submit Request'}
+              </Button>
+            )}
           </DialogActions>
         </form>
       </Dialog>

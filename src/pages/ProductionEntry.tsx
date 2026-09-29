@@ -29,7 +29,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   IconButton,
   Dialog,
   DialogTitle,
@@ -41,6 +40,7 @@ import {
   CircularProgress,
   Snackbar,
   InputAdornment,
+  Chip
 } from '@mui/material';
 
 // Icons
@@ -127,7 +127,7 @@ export const ProductionEntry: React.FC = () => {
     return (editFormData.rejectedQuantity / total) * 100;
   }, [editFormData.actualVolume, editFormData.rejectedQuantity]);
 
-  // Automatically compute actual volume when accepted + rejected changes (convenience)
+  // Automatically compute actual volume when accepted + rejected changes
   useEffect(() => {
     const sum = Number(formData.acceptedQuantity) + Number(formData.rejectedQuantity);
     if (sum > 0) {
@@ -158,7 +158,7 @@ export const ProductionEntry: React.FC = () => {
     }
   }, [editRecord]);
 
-  // Live MTD Calculation (Month-To-Date sum for matching plant/category up to selected date)
+  // Live MTD Calculation
   const liveMtdStats = useMemo(() => {
     if (!formData.plantId || !formData.categoryId || !formData.date) {
       return { mtd: 0, balance: 0, achievement: 0 };
@@ -167,7 +167,6 @@ export const ProductionEntry: React.FC = () => {
     const selectedDate = new Date(formData.date);
     const startOfMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
 
-    // Sum historical records from the same month up to (and including) the selected date
     const historicalSum = records
       .filter((r) => {
         const recDate = new Date(r.date);
@@ -180,7 +179,6 @@ export const ProductionEntry: React.FC = () => {
       })
       .reduce((sum, r) => sum + r.actualVolume, 0);
 
-    // MTD includes current form entries
     const mtdTotal = historicalSum + Number(formData.actualVolume);
     const balance = Math.max(0, Number(formData.budgetVolume) - mtdTotal);
     const achievement = formData.budgetVolume > 0 ? (mtdTotal / formData.budgetVolume) * 100 : 0;
@@ -391,32 +389,35 @@ export const ProductionEntry: React.FC = () => {
   const canDelete = hasPermission('production', 'delete');
 
   return (
-    <Box>
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 800, color: 'text.primary', mb: 0.5 }}>
-          Production Logs & Entry
+    <Box sx={{ py: 1 }}>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <PrecisionManufacturingIcon sx={{ color: '#10b981' }} />
+          Production Logs & Output Entry
         </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Track budgeted versus actual volumes, inspect quality yield, and check monthly balance logs.
+        <Typography variant="body2" sx={{ color: '#64748b', mt: 0.3 }}>
+          Record actual volumes, scrap quantities, and monitor monthly balance targets directly.
         </Typography>
       </Box>
 
-      <Grid container spacing={4}>
+      <Grid container spacing={3}>
         {/* Left Side: Logging Form */}
         {hasPermission('production', 'create') && (
           <Grid size={{ xs: 12, lg: 4 }}>
-            <Card sx={{ position: 'sticky', top: 90 }}>
-              <CardContent sx={{ p: 3 }}>
-                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 3, color: 'secondary.light' }}>
-                  <PrecisionManufacturingIcon />
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            <Card sx={{ borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <CardContent sx={{ p: 2.5 }}>
+                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 2.5, color: '#10b981' }}>
+                  <Box sx={{ p: 0.8, borderRadius: '8px', bgcolor: 'rgba(16, 185, 129, 0.1)', display: 'flex' }}>
+                    <PrecisionManufacturingIcon sx={{ fontSize: 20 }} />
+                  </Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a' }}>
                     Log Production Run
                   </Typography>
                 </Stack>
 
                 <form onSubmit={handleSubmit}>
-                  <Stack spacing={2.5}>
-                    <FormControl fullWidth required>
+                  <Stack spacing={2}>
+                    <FormControl fullWidth size="small" required>
                       <InputLabel>Select Plant</InputLabel>
                       <Select
                         label="Select Plant"
@@ -429,7 +430,7 @@ export const ProductionEntry: React.FC = () => {
                       </Select>
                     </FormControl>
 
-                    <FormControl fullWidth required>
+                    <FormControl fullWidth size="small" required>
                       <InputLabel>Product Category</InputLabel>
                       <Select
                         label="Product Category"
@@ -445,17 +446,19 @@ export const ProductionEntry: React.FC = () => {
                     <TextField
                       label="Run Date"
                       type="date"
+                      size="small"
                       fullWidth
                       slotProps={{ inputLabel: { shrink: true } }}
                       value={formData.date}
                       onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                     />
 
-                    <Grid container spacing={2}>
+                    <Grid container spacing={1.5}>
                       <Grid size={6}>
                         <TextField
-                          label="Budgeted Volume"
+                          label="Budget Volume"
                           type="number"
+                          size="small"
                           fullWidth
                           value={formData.budgetVolume || ''}
                           onChange={(e) => setFormData({ ...formData, budgetVolume: Number(e.target.value) })}
@@ -465,6 +468,7 @@ export const ProductionEntry: React.FC = () => {
                         <TextField
                           label="Planned Volume"
                           type="number"
+                          size="small"
                           fullWidth
                           value={formData.plannedVolume || ''}
                           onChange={(e) => setFormData({ ...formData, plannedVolume: Number(e.target.value) })}
@@ -472,11 +476,12 @@ export const ProductionEntry: React.FC = () => {
                       </Grid>
                     </Grid>
 
-                    <Grid container spacing={2}>
+                    <Grid container spacing={1.5}>
                       <Grid size={6}>
                         <TextField
                           label="Accepted Qty"
                           type="number"
+                          size="small"
                           fullWidth
                           value={formData.acceptedQuantity || ''}
                           onChange={(e) => setFormData({ ...formData, acceptedQuantity: Number(e.target.value) })}
@@ -486,6 +491,7 @@ export const ProductionEntry: React.FC = () => {
                         <TextField
                           label="Rejected Qty"
                           type="number"
+                          size="small"
                           fullWidth
                           value={formData.rejectedQuantity || ''}
                           onChange={(e) => setFormData({ ...formData, rejectedQuantity: Number(e.target.value) })}
@@ -496,62 +502,63 @@ export const ProductionEntry: React.FC = () => {
                     <TextField
                       label="Actual Produced Volume"
                       type="number"
+                      size="small"
                       fullWidth
                       disabled
                       value={formData.actualVolume}
+                      helperText="Calculated automatically (Accepted + Rejected)"
                     />
 
-                    {/* Live Calculations Display Panel */}
-                    <Paper
-                      elevation={0}
+                    {/* Live Calculations Preview Box */}
+                    <Box
                       sx={{
                         p: 2,
-                        borderRadius: '12px',
-                        border: '1px solid rgba(255, 255, 255, 0.06)',
-                        bgcolor: 'rgba(255,255,255,0.01)',
+                        borderRadius: '10px',
+                        border: '1px solid #e2e8f0',
+                        bgcolor: '#f8fafc',
                       }}
                     >
-                      <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 700, textTransform: 'uppercase', display: 'block', mb: 1 }}>
-                        Live Calculations Preview
+                      <Typography variant="caption" sx={{ fontWeight: 800, textTransform: 'uppercase', display: 'block', mb: 1, color: '#64748b', fontSize: '0.675rem' }}>
+                        Live Metrics Preview
                       </Typography>
                       <Grid container spacing={1.5}>
                         <Grid size={6}>
-                          <Typography variant="caption" color="text.secondary">Reject Rate:</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 700, color: liveRejectRate > 3 ? 'error.main' : 'secondary.main' }}>
+                          <Typography variant="caption" sx={{ color: '#64748b', display: 'block' }}>Reject Rate:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 800, color: liveRejectRate > 3 ? '#ef4444' : '#10b981' }}>
                             {liveRejectRate.toFixed(2)}%
                           </Typography>
                         </Grid>
                         <Grid size={6}>
-                          <Typography variant="caption" color="text.secondary">Yield Rate:</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 700, color: 'secondary.light' }}>
+                          <Typography variant="caption" sx={{ color: '#64748b', display: 'block' }}>Yield Rate:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 800, color: '#10b981' }}>
                             {formData.actualVolume > 0 ? (100 - liveRejectRate).toFixed(2) : 0}%
                           </Typography>
                         </Grid>
                         <Grid size={6}>
-                          <Typography variant="caption" color="text.secondary">MTD Total Volume:</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          <Typography variant="caption" sx={{ color: '#64748b', display: 'block' }}>MTD Volume:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 800, color: '#0f172a' }}>
                             {liveMtdStats.mtd.toLocaleString()}
                           </Typography>
                         </Grid>
                         <Grid size={6}>
-                          <Typography variant="caption" color="text.secondary">Remaining Balance:</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          <Typography variant="caption" sx={{ color: '#64748b', display: 'block' }}>Remaining Balance:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 800, color: '#d97706' }}>
                             {liveMtdStats.balance.toLocaleString()}
                           </Typography>
                         </Grid>
                       </Grid>
-                    </Paper>
+                    </Box>
 
                     <Button
                       type="submit"
                       variant="contained"
                       color="secondary"
-                      size="large"
+                      size="medium"
                       fullWidth
                       disabled={createMutation.isPending}
-                      sx={{ py: 1.5 }}
+                      sx={{ py: 1.2, fontWeight: 700, borderRadius: '8px' }}
                     >
-                      {createMutation.isPending ? <CircularProgress size={24} /> : 'Submit Production Run'}
+                      {createMutation.isPending ? <CircularProgress size={22} color="inherit" /> : 'Submit Production Log'}
                     </Button>
                   </Stack>
                 </form>
@@ -562,21 +569,22 @@ export const ProductionEntry: React.FC = () => {
 
         {/* Right Side: Logs Table */}
         <Grid size={{ xs: 12, lg: hasPermission('production', 'create') ? 8 : 12 }}>
-          <Card>
-            <CardContent sx={{ px: 0 }}>
-              <Box sx={{ px: 3, pb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', color: 'secondary.light' }}>
-                  <HistoryIcon />
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                    Operational Production Logs
+          <Card sx={{ borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <CardContent sx={{ p: 2.5 }}>
+              <Box sx={{ pb: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <HistoryIcon sx={{ color: '#6366f1' }} />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                    Production Activity History
                   </Typography>
                 </Stack>
-                <Stack direction="row" spacing={1.5}>
+                <Stack direction="row" spacing={1}>
                   <Button
                     variant="outlined"
                     startIcon={<FileDownloadIcon />}
                     size="small"
                     onClick={exportExcel}
+                    sx={{ borderRadius: '8px', fontWeight: 600, fontSize: '0.8rem' }}
                   >
                     Excel
                   </Button>
@@ -585,6 +593,7 @@ export const ProductionEntry: React.FC = () => {
                     startIcon={<FileDownloadIcon />}
                     size="small"
                     onClick={exportPDF}
+                    sx={{ borderRadius: '8px', fontWeight: 600, fontSize: '0.8rem' }}
                   >
                     PDF
                   </Button>
@@ -592,20 +601,20 @@ export const ProductionEntry: React.FC = () => {
               </Box>
 
               {/* Table Filters */}
-              <Box sx={{ px: 3, pb: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ pb: 2, display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
                 <TextField
                   placeholder="Search Category name..."
                   size="small"
-                  sx={{ width: { xs: '100%', sm: 300 } }}
+                  sx={{ width: { xs: '100%', sm: 260 } }}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   slotProps={{ input: { startAdornment: (
                       <InputAdornment position="start">
-                        <SearchIcon sx={{ color: 'text.disabled' }} />
+                        <SearchIcon sx={{ color: '#94a3b8', fontSize: 20 }} />
                       </InputAdornment>
                     ) } }}
                 />
-                <FormControl size="small" sx={{ width: 180 }}>
+                <FormControl size="small" sx={{ width: { xs: '100%', sm: 180 } }}>
                   <InputLabel>Filter by Plant</InputLabel>
                   <Select
                     label="Filter by Plant"
@@ -620,17 +629,17 @@ export const ProductionEntry: React.FC = () => {
                 </FormControl>
               </Box>
 
-              <TableContainer sx={{ maxHeight: 600 }}>
-                <Table stickyHeader>
+              <TableContainer sx={{ maxHeight: 540, border: '1px solid #e2e8f0', borderRadius: '10px' }}>
+                <Table stickyHeader size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ pl: 3 }}>Date & Plant</TableCell>
+                      <TableCell>Date & Plant</TableCell>
                       <TableCell>Category</TableCell>
                       <TableCell align="right">Budget / Planned</TableCell>
-                      <TableCell align="right">Produced (Actual)</TableCell>
+                      <TableCell align="right">Produced</TableCell>
                       <TableCell align="right">Accepted / Rejected</TableCell>
                       <TableCell align="center">Reject Rate</TableCell>
-                      {(canEdit || canDelete) && <TableCell align="right" sx={{ pr: 3 }}>Actions</TableCell>}
+                      {(canEdit || canDelete) && <TableCell align="right">Actions</TableCell>}
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -641,44 +650,51 @@ export const ProductionEntry: React.FC = () => {
                         const rejRate = r.actualVolume > 0 ? (r.rejectedQuantity / r.actualVolume) * 100 : 0;
                         return (
                           <TableRow key={r.id} hover>
-                            <TableCell sx={{ pl: 3 }}>
-                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            <TableCell>
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a' }}>
                                 {new Date(r.date).toLocaleDateString()}
                               </Typography>
-                              <Typography variant="caption" color="text.secondary">
+                              <Typography variant="caption" sx={{ color: '#64748b' }}>
                                 {plantObj?.plantName || 'N/A'}
                               </Typography>
                             </TableCell>
-                            <TableCell>{catObj?.name || 'N/A'}</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>{catObj?.name || 'N/A'}</TableCell>
                             <TableCell align="right">
-                              <Typography variant="body2">{r.budgetVolume.toLocaleString()}</Typography>
-                              <Typography variant="caption" color="text.secondary">{r.plannedVolume.toLocaleString()}</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>{r.budgetVolume.toLocaleString()}</Typography>
+                              <Typography variant="caption" sx={{ color: '#64748b' }}>Plan: {r.plannedVolume.toLocaleString()}</Typography>
                             </TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700, color: 'secondary.light' }}>
+                            <TableCell align="right" sx={{ fontWeight: 800, color: '#10b981' }}>
                               {r.actualVolume.toLocaleString()}
                             </TableCell>
                             <TableCell align="right">
-                              <Typography variant="body2" color="secondary.main">{r.acceptedQuantity.toLocaleString()}</Typography>
-                              <Typography variant="caption" color="error.light">{r.rejectedQuantity.toLocaleString()}</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: '#059669' }}>{r.acceptedQuantity.toLocaleString()}</Typography>
+                              <Typography variant="caption" sx={{ color: '#dc2626' }}>Rej: {r.rejectedQuantity.toLocaleString()}</Typography>
                             </TableCell>
                             <TableCell align="center">
-                              <Typography variant="body2" sx={{ fontWeight: 700, color: rejRate > 3 ? 'error.main' : 'secondary.main' }}>
-                                {rejRate.toFixed(1)}%
-                              </Typography>
+                              <Chip
+                                size="small"
+                                label={`${rejRate.toFixed(1)}%`}
+                                sx={{
+                                  fontWeight: 700,
+                                  bgcolor: rejRate > 3 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                                  color: rejRate > 3 ? '#dc2626' : '#059669',
+                                  fontSize: '0.7rem'
+                                }}
+                              />
                             </TableCell>
                             {(canEdit || canDelete) && (
-                              <TableCell align="right" sx={{ pr: 3 }}>
-                                <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
+                              <TableCell align="right">
+                                <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
                                   {canEdit && (
                                     <Tooltip title="Edit Log">
-                                      <IconButton onClick={() => setEditRecord(r)} size="small" color="primary">
+                                      <IconButton onClick={() => setEditRecord(r)} size="small" sx={{ color: '#6366f1' }}>
                                         <EditIcon fontSize="small" />
                                       </IconButton>
                                     </Tooltip>
                                   )}
                                   {canDelete && (
                                     <Tooltip title="Delete Log">
-                                      <IconButton onClick={() => { if(confirm('Are you sure you want to delete this log?')) deleteMutation.mutate(r); }} size="small" color="error">
+                                      <IconButton onClick={() => { if(confirm('Are you sure you want to delete this log?')) deleteMutation.mutate(r); }} size="small" sx={{ color: '#ef4444' }}>
                                         <DeleteIcon fontSize="small" />
                                       </IconButton>
                                     </Tooltip>
@@ -691,11 +707,11 @@ export const ProductionEntry: React.FC = () => {
                       })
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                        <TableCell colSpan={7} align="center" sx={{ py: 6, color: '#64748b' }}>
                           {loadingRecords ? (
-                            <CircularProgress color="primary" />
+                            <CircularProgress size={30} />
                           ) : (
-                            <Typography color="text.secondary">No production runs logged.</Typography>
+                            'No production runs logged.'
                           )}
                         </TableCell>
                       </TableRow>
@@ -709,12 +725,28 @@ export const ProductionEntry: React.FC = () => {
       </Grid>
 
       {/* Edit Dialog */}
-      <Dialog open={Boolean(editRecord)} onClose={() => setEditRecord(null)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Edit Production Record</DialogTitle>
+      <Dialog
+        open={Boolean(editRecord)}
+        onClose={() => setEditRecord(null)}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              p: 1
+            }
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: '#0f172a', pb: 1 }}>
+          Edit Production Record
+        </DialogTitle>
         <form onSubmit={handleEditSubmit}>
-          <DialogContent>
-            <Stack spacing={2.5} sx={{ mt: 1 }}>
-              <FormControl fullWidth required>
+          <DialogContent sx={{ pt: 1 }}>
+            <Stack spacing={2.5}>
+              <FormControl fullWidth size="small" required>
                 <InputLabel>Plant</InputLabel>
                 <Select
                   label="Plant"
@@ -727,7 +759,7 @@ export const ProductionEntry: React.FC = () => {
                 </Select>
               </FormControl>
 
-              <FormControl fullWidth required>
+              <FormControl fullWidth size="small" required>
                 <InputLabel>Product Category</InputLabel>
                 <Select
                   label="Product Category"
@@ -743,6 +775,7 @@ export const ProductionEntry: React.FC = () => {
               <TextField
                 label="Date"
                 type="date"
+                size="small"
                 fullWidth
                 slotProps={{ inputLabel: { shrink: true } }}
                 value={editFormData.date}
@@ -754,6 +787,7 @@ export const ProductionEntry: React.FC = () => {
                   <TextField
                     label="Budgeted Volume"
                     type="number"
+                    size="small"
                     fullWidth
                     value={editFormData.budgetVolume}
                     onChange={(e) => setEditFormData({ ...editFormData, budgetVolume: Number(e.target.value) })}
@@ -763,6 +797,7 @@ export const ProductionEntry: React.FC = () => {
                   <TextField
                     label="Planned Volume"
                     type="number"
+                    size="small"
                     fullWidth
                     value={editFormData.plannedVolume}
                     onChange={(e) => setEditFormData({ ...editFormData, plannedVolume: Number(e.target.value) })}
@@ -775,6 +810,7 @@ export const ProductionEntry: React.FC = () => {
                   <TextField
                     label="Accepted Quantity"
                     type="number"
+                    size="small"
                     fullWidth
                     value={editFormData.acceptedQuantity}
                     onChange={(e) => setEditFormData({ ...editFormData, acceptedQuantity: Number(e.target.value) })}
@@ -784,6 +820,7 @@ export const ProductionEntry: React.FC = () => {
                   <TextField
                     label="Rejected Quantity"
                     type="number"
+                    size="small"
                     fullWidth
                     value={editFormData.rejectedQuantity}
                     onChange={(e) => setEditFormData({ ...editFormData, rejectedQuantity: Number(e.target.value) })}
@@ -794,21 +831,22 @@ export const ProductionEntry: React.FC = () => {
               <TextField
                 label="Actual Produced Volume"
                 type="number"
+                size="small"
                 fullWidth
                 disabled
                 value={editFormData.actualVolume}
               />
 
-              <Typography variant="body2" color="text.secondary">
-                Calculated Reject Rate: <span style={{ fontWeight: 700, color: editLiveRejectRate > 3 ? '#ef4444' : '#10b981' }}>{editLiveRejectRate.toFixed(2)}%</span>
+              <Typography variant="body2" sx={{ color: '#64748b' }}>
+                Calculated Reject Rate: <strong style={{ color: editLiveRejectRate > 3 ? '#ef4444' : '#10b981' }}>{editLiveRejectRate.toFixed(2)}%</strong>
               </Typography>
             </Stack>
           </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={() => setEditRecord(null)} color="inherit">
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setEditRecord(null)} variant="outlined" sx={{ borderRadius: '8px' }}>
               Cancel
             </Button>
-            <Button type="submit" variant="contained" color="secondary" disabled={updateMutation.isPending}>
+            <Button type="submit" variant="contained" color="secondary" disabled={updateMutation.isPending} sx={{ borderRadius: '8px', fontWeight: 700 }}>
               Save Changes
             </Button>
           </DialogActions>
@@ -820,7 +858,7 @@ export const ProductionEntry: React.FC = () => {
         autoHideDuration={4000}
         onClose={() => setNotification((n) => ({ ...n, open: false }))}
       >
-        <Alert severity={notification.severity} variant="filled" sx={{ width: '100%' }}>
+        <Alert severity={notification.severity} variant="filled" sx={{ width: '100%', borderRadius: '10px' }}>
           {notification.message}
         </Alert>
       </Snackbar>

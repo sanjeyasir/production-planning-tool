@@ -38,6 +38,8 @@ import {
   Checkbox,
   FormControlLabel,
   FormGroup,
+  Chip,
+  InputAdornment
 } from '@mui/material';
 
 import EditIcon from '@mui/icons-material/Edit';
@@ -46,6 +48,8 @@ import ToggleOnIcon from '@mui/icons-material/ToggleOn';
 import ToggleOffIcon from '@mui/icons-material/ToggleOff';
 import AddIcon from '@mui/icons-material/Add';
 import LockResetIcon from '@mui/icons-material/LockReset';
+import PeopleIcon from '@mui/icons-material/People';
+import SearchIcon from '@mui/icons-material/Search';
 
 import { 
   collection, 
@@ -260,11 +264,9 @@ export const Users: React.FC = () => {
       setCreating(true);
       const emailLower = createFormData.email.trim().toLowerCase();
 
-      // 1. Create Auth user via secondary app instance
       const secondaryUser = await registerSecondaryUser(emailLower, createFormData.password);
       const newUid = secondaryUser.uid;
 
-      // 2. Create profile document in Firestore users collection
       await setDoc(doc(db, 'users', newUid), {
         tenantId,
         name: createFormData.name.trim(),
@@ -289,16 +291,13 @@ export const Users: React.FC = () => {
 
   const handleApproveReset = async (request: any) => {
     try {
-      // 1. Send Firebase native password reset email
       await sendPasswordResetEmail(auth, request.email);
 
-      // 2. Update status in password_resets collection
       await updateDoc(doc(db, 'password_resets', request.id), {
         status: 'APPROVED',
         approvedAt: new Date()
       });
 
-      // 3. Mark isFirstLogin = false in Firestore users collection
       await updateDoc(doc(db, 'users', request.userId), {
         isFirstLogin: false
       });
@@ -311,19 +310,21 @@ export const Users: React.FC = () => {
   };
 
   return (
-    <Box>
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+    <Box sx={{ py: 1 }}>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 800 }}>
-            User & Member Administration
+          <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PeopleIcon sx={{ color: '#6366f1' }} />
+            User & Member Management
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Configure security roles, manage team status, and approve password reset requests.
+          <Typography variant="body2" sx={{ color: '#64748b', mt: 0.3 }}>
+            Configure security roles, monitor account status, and approve pending password reset requests.
           </Typography>
         </Box>
         {isSuperAdmin && (
           <Button
             variant="contained"
+            color="primary"
             startIcon={<AddIcon />}
             onClick={() => setCreateDialogOpen(true)}
             sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
@@ -333,91 +334,96 @@ export const Users: React.FC = () => {
         )}
       </Box>
 
-      <Stack spacing={4}>
+      <Stack spacing={3}>
         {/* Users List Card */}
-        <Card>
-          <CardContent sx={{ px: 0 }}>
-            <Box sx={{ px: 3, pb: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
+        <Card sx={{ borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <CardContent sx={{ p: 2.5 }}>
+            <Box sx={{ pb: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
               <TextField
                 placeholder="Search users by name or email..."
                 size="small"
-                sx={{ width: 320 }}
+                sx={{ width: { xs: '100%', sm: 300 } }}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ color: '#94a3b8', fontSize: 20 }} />
+                      </InputAdornment>
+                    ),
+                  },
+                }}
               />
             </Box>
 
-            <TableContainer>
-              <Table>
+            <TableContainer sx={{ border: '1px solid #e2e8f0', borderRadius: '10px' }}>
+              <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ pl: 3 }}>User Details</TableCell>
+                    <TableCell>User Details</TableCell>
                     <TableCell>Email</TableCell>
                     <TableCell>Role</TableCell>
                     <TableCell align="center">Status</TableCell>
-                    {isSuperAdmin && <TableCell align="right" sx={{ pr: 3 }}>Actions</TableCell>}
+                    {isSuperAdmin && <TableCell align="right">Actions</TableCell>}
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {filteredUsers.length > 0 ? (
                     filteredUsers.map((u) => (
                       <TableRow key={u.id} hover>
-                        <TableCell sx={{ pl: 3 }}>
+                        <TableCell>
                           <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                            <Avatar sx={{ bgcolor: 'primary.dark', width: 34, height: 34, fontSize: '0.85rem' }}>
+                            <Avatar sx={{ bgcolor: '#10b981', width: 32, height: 32, fontSize: '0.8rem', fontWeight: 700 }}>
                               {u.name?.charAt(0).toUpperCase()}
                             </Avatar>
-                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                              {u.name} {u.id === userId && <span style={{ color: '#6366f1', fontSize: '0.75rem' }}>(You)</span>}
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: '#0f172a' }}>
+                              {u.name} {u.id === userId && <span style={{ color: '#6366f1', fontSize: '0.75rem', fontWeight: 700 }}>(You)</span>}
                             </Typography>
                           </Stack>
                         </TableCell>
-                        <TableCell>{u.email}</TableCell>
+                        <TableCell sx={{ color: '#475569' }}>{u.email}</TableCell>
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <SecurityIcon fontSize="small" sx={{ color: 'primary.light' }} />
-                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            <SecurityIcon sx={{ color: '#6366f1', fontSize: 17 }} />
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155' }}>
                               {ROLE_MAP[u.roleId] || 'Viewer'}
                             </Typography>
                           </Box>
                         </TableCell>
                         <TableCell align="center">
-                          <Box
+                          <Chip
+                            size="small"
+                            label={u.status}
                             sx={{
-                              display: 'inline-flex',
-                              bgcolor: u.status === 'ACTIVE' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                              color: u.status === 'ACTIVE' ? 'secondary.light' : 'error.light',
-                              borderRadius: '6px',
-                              px: 1.5,
-                              py: 0.5,
-                              fontSize: '0.75rem',
                               fontWeight: 700,
+                              bgcolor: u.status === 'ACTIVE' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                              color: u.status === 'ACTIVE' ? '#059669' : '#dc2626',
+                              fontSize: '0.7rem'
                             }}
-                          >
-                            {u.status}
-                          </Box>
+                          />
                         </TableCell>
                         {isSuperAdmin && (
-                          <TableCell align="right" sx={{ pr: 3 }}>
+                          <TableCell align="right">
                             {u.id !== userId ? (
-                              <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'flex-end' }}>
+                              <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', alignItems: 'center' }}>
                                 <Tooltip title="Toggle Status">
                                   <IconButton onClick={() => toggleUserStatusMutation.mutate(u)} size="small">
                                     {u.status === 'ACTIVE' ? (
-                                      <ToggleOnIcon sx={{ color: 'secondary.main', fontSize: 26 }} />
+                                      <ToggleOnIcon sx={{ color: '#10b981', fontSize: 26 }} />
                                     ) : (
-                                      <ToggleOffIcon sx={{ color: 'text.disabled', fontSize: 26 }} />
+                                      <ToggleOffIcon sx={{ color: '#94a3b8', fontSize: 26 }} />
                                     )}
                                   </IconButton>
                                 </Tooltip>
                                 <Tooltip title="Modify Access">
-                                  <IconButton onClick={() => handleEditClick(u)} size="small" color="primary">
+                                  <IconButton onClick={() => handleEditClick(u)} size="small" sx={{ color: '#6366f1' }}>
                                     <EditIcon fontSize="small" />
                                   </IconButton>
                                 </Tooltip>
                               </Stack>
                             ) : (
-                              <Typography variant="caption" color="text.disabled" sx={{ pr: 2 }}>Self account</Typography>
+                              <Typography variant="caption" sx={{ color: '#94a3b8', pr: 1.5 }}>Self account</Typography>
                             )}
                           </TableCell>
                         )}
@@ -425,8 +431,8 @@ export const Users: React.FC = () => {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
-                        {loadingUsers ? <CircularProgress color="primary" /> : <Typography color="text.secondary">No users found.</Typography>}
+                      <TableCell colSpan={5} align="center" sx={{ py: 6, color: '#64748b' }}>
+                        {loadingUsers ? <CircularProgress size={30} /> : 'No users found.'}
                       </TableCell>
                     </TableRow>
                   )}
@@ -438,47 +444,49 @@ export const Users: React.FC = () => {
 
         {/* Reset Requests Card (Visible to Admins) */}
         {isSuperAdmin && (
-          <Card>
-            <CardContent sx={{ px: 0 }}>
-              <Typography variant="h6" sx={{ px: 3, pb: 2, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <LockResetIcon sx={{ color: 'primary.light' }} />
+          <Card sx={{ borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
+            <CardContent sx={{ p: 2.5 }}>
+              <Typography variant="subtitle1" sx={{ pb: 1.5, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <LockResetIcon sx={{ color: '#6366f1' }} />
                 Pending Password Reset Requests
               </Typography>
               <Divider sx={{ mb: 2 }} />
-              <TableContainer>
-                <Table>
+              <TableContainer sx={{ border: '1px solid #e2e8f0', borderRadius: '10px' }}>
+                <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ pl: 3 }}>Name</TableCell>
+                      <TableCell>User Name</TableCell>
                       <TableCell>Email</TableCell>
                       <TableCell>Requested At</TableCell>
-                      <TableCell align="right" sx={{ pr: 3 }}>Actions</TableCell>
+                      <TableCell align="right">Action</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {resetRequests.length > 0 ? (
                       resetRequests.map((req) => (
                         <TableRow key={req.id} hover>
-                          <TableCell sx={{ pl: 3, fontWeight: 600 }}>{req.name}</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>{req.name}</TableCell>
                           <TableCell>{req.email}</TableCell>
-                          <TableCell>{new Date(req.requestedAt?.seconds * 1000 || req.requestedAt).toLocaleString()}</TableCell>
-                          <TableCell align="right" sx={{ pr: 3 }}>
+                          <TableCell sx={{ fontSize: '0.8rem', color: '#64748b' }}>
+                            {req.requestedAt?.toDate ? req.requestedAt.toDate().toLocaleString() : new Date(req.requestedAt).toLocaleString()}
+                          </TableCell>
+                          <TableCell align="right">
                             <Button
-                              variant="outlined"
+                              variant="contained"
                               color="primary"
                               size="small"
                               onClick={() => handleApproveReset(req)}
-                              sx={{ textTransform: 'none', borderRadius: '6px', fontWeight: 600 }}
+                              sx={{ borderRadius: '6px', textTransform: 'none', fontWeight: 600 }}
                             >
-                              Approve & Send Reset Link
+                              Send Reset Link
                             </Button>
                           </TableCell>
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={4} align="center" sx={{ py: 6 }}>
-                          {loadingResets ? <CircularProgress color="primary" /> : <Typography color="text.secondary">No pending password reset requests.</Typography>}
+                        <TableCell colSpan={4} align="center" sx={{ py: 4, color: '#64748b' }}>
+                          {loadingResets ? <CircularProgress size={24} /> : 'No pending reset requests.'}
                         </TableCell>
                       </TableRow>
                     )}
@@ -490,46 +498,132 @@ export const Users: React.FC = () => {
         )}
       </Stack>
 
-      {/* Add User Dialog */}
-      <Dialog open={createDialogOpen} onClose={() => !creating && setCreateDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Add New Team Member</DialogTitle>
+      {/* Create User Dialog */}
+      <Dialog
+        open={createDialogOpen}
+        onClose={() => setCreateDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              p: 1
+            }
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: '#0f172a', pb: 1 }}>
+          Add New Team Member
+        </DialogTitle>
         <form onSubmit={handleCreateSubmit}>
-          <DialogContent>
-            <Stack spacing={2.5} sx={{ mt: 1 }}>
+          <DialogContent sx={{ pt: 1 }}>
+            <Stack spacing={2.5}>
               <TextField
                 label="Full Name"
+                size="small"
                 required
                 fullWidth
                 value={createFormData.name}
                 onChange={(e) => setCreateFormData({ ...createFormData, name: e.target.value })}
-                disabled={creating}
               />
               <TextField
                 label="Email Address"
                 type="email"
+                size="small"
                 required
                 fullWidth
                 value={createFormData.email}
                 onChange={(e) => setCreateFormData({ ...createFormData, email: e.target.value })}
-                disabled={creating}
               />
               <TextField
                 label="Temporary Password"
                 type="password"
+                size="small"
                 required
                 fullWidth
-                helperText="Must be at least 6 characters. User will be forced to change this upon first login."
+                helperText="Must be at least 6 characters. User will change on first login."
                 value={createFormData.password}
                 onChange={(e) => setCreateFormData({ ...createFormData, password: e.target.value })}
-                disabled={creating}
               />
-              <FormControl fullWidth required>
+              <FormControl fullWidth size="small" required>
                 <InputLabel>Security Role</InputLabel>
                 <Select
                   label="Security Role"
                   value={createFormData.roleId}
                   onChange={(e) => setCreateFormData({ ...createFormData, roleId: e.target.value })}
-                  disabled={creating}
+                >
+                  <MenuItem value="tenant_admin">Tenant Admin (Full Plant Management)</MenuItem>
+                  <MenuItem value="plant_manager">Plant Manager</MenuItem>
+                  <MenuItem value="supervisor">Supervisor</MenuItem>
+                  <MenuItem value="operator">Operator</MenuItem>
+                  <MenuItem value="viewer">Viewer (Read Only)</MenuItem>
+                </Select>
+              </FormControl>
+
+              <Box>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', display: 'block', mb: 1 }}>
+                  Screen Access Permissions
+                </Typography>
+                <FormGroup sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 0.5 }}>
+                  {SCREEN_PERMISSIONS.map((perm) => (
+                    <FormControlLabel
+                      key={perm.id}
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={createFormData.permissions.includes(perm.id)}
+                          onChange={() => handleCreatePermissionToggle(perm.id)}
+                          sx={{ color: '#6366f1', '&.Mui-checked': { color: '#6366f1' } }}
+                        />
+                      }
+                      label={<Typography variant="body2" sx={{ fontSize: '0.825rem', color: '#334155' }}>{perm.name}</Typography>}
+                    />
+                  ))}
+                </FormGroup>
+              </Box>
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setCreateDialogOpen(false)} variant="outlined" sx={{ borderRadius: '8px' }}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="contained" color="primary" disabled={creating} sx={{ borderRadius: '8px', fontWeight: 700 }}>
+              {creating ? <CircularProgress size={20} color="inherit" /> : 'Create Member'}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+
+      {/* Edit User Dialog */}
+      <Dialog
+        open={editDialogOpen}
+        onClose={() => setEditDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              p: 1
+            }
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: '#0f172a', pb: 1 }}>
+          Modify User Access: {editingUser?.name}
+        </DialogTitle>
+        <form onSubmit={handleEditSubmit}>
+          <DialogContent sx={{ pt: 1 }}>
+            <Stack spacing={2.5}>
+              <FormControl fullWidth size="small" required>
+                <InputLabel>Security Role</InputLabel>
+                <Select
+                  label="Security Role"
+                  value={editFormData.roleId}
+                  onChange={(e) => setEditFormData({ ...editFormData, roleId: e.target.value })}
                 >
                   <MenuItem value="tenant_admin">Tenant Admin</MenuItem>
                   <MenuItem value="plant_manager">Plant Manager</MenuItem>
@@ -539,106 +633,47 @@ export const Users: React.FC = () => {
                 </Select>
               </FormControl>
 
-              <Divider sx={{ my: 1 }} />
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                Granted Screen Access
-              </Typography>
-              <FormGroup>
-                {SCREEN_PERMISSIONS.map((perm) => (
-                  <FormControlLabel
-                    key={perm.id}
-                    control={
-                      <Checkbox
-                        checked={createFormData.permissions.includes(perm.id)}
-                        onChange={() => handleCreatePermissionToggle(perm.id)}
-                        disabled={creating}
-                        size="small"
-                      />
-                    }
-                    label={<Typography variant="body2">{perm.name}</Typography>}
-                  />
-                ))}
-              </FormGroup>
-            </Stack>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={() => setCreateDialogOpen(false)} color="inherit" disabled={creating}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="contained" disabled={creating}>
-              {creating ? <CircularProgress size={24} color="inherit" /> : 'Create Account'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+              <FormControl fullWidth size="small" required>
+                <InputLabel>Account Status</InputLabel>
+                <Select
+                  label="Account Status"
+                  value={editFormData.status}
+                  onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
+                >
+                  <MenuItem value="ACTIVE">ACTIVE</MenuItem>
+                  <MenuItem value="INACTIVE">INACTIVE</MenuItem>
+                </Select>
+              </FormControl>
 
-      {/* Edit User Dialog */}
-      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Modify Member Access</DialogTitle>
-        <form onSubmit={handleEditSubmit}>
-          <DialogContent>
-            {editingUser && (
-              <Stack spacing={2.5} sx={{ mt: 1 }}>
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Name: {editingUser.name}</Typography>
-                  <Typography variant="body2" color="text.secondary">Email: {editingUser.email}</Typography>
-                </Box>
-
-                <FormControl fullWidth required>
-                  <InputLabel>Security Role</InputLabel>
-                  <Select
-                    label="Security Role"
-                    value={editFormData.roleId}
-                    onChange={(e) => setEditFormData({ ...editFormData, roleId: e.target.value })}
-                  >
-                    <MenuItem value="tenant_admin">Tenant Admin</MenuItem>
-                    <MenuItem value="plant_manager">Plant Manager</MenuItem>
-                    <MenuItem value="supervisor">Supervisor</MenuItem>
-                    <MenuItem value="operator">Operator</MenuItem>
-                    <MenuItem value="viewer">Viewer</MenuItem>
-                  </Select>
-                </FormControl>
-
-                <FormControl fullWidth>
-                  <InputLabel>Member Status</InputLabel>
-                  <Select
-                    label="Member Status"
-                    value={editFormData.status}
-                    onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
-                  >
-                    <MenuItem value="ACTIVE">ACTIVE</MenuItem>
-                    <MenuItem value="INACTIVE">INACTIVE</MenuItem>
-                  </Select>
-                </FormControl>
-
-                <Divider sx={{ my: 1 }} />
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                  Granted Screen Access
+              <Box>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', display: 'block', mb: 1 }}>
+                  Screen Access Permissions
                 </Typography>
-                <FormGroup>
+                <FormGroup sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 0.5 }}>
                   {SCREEN_PERMISSIONS.map((perm) => (
                     <FormControlLabel
                       key={perm.id}
                       control={
                         <Checkbox
+                          size="small"
                           checked={editFormData.permissions.includes(perm.id)}
                           onChange={() => handleEditPermissionToggle(perm.id)}
-                          size="small"
+                          sx={{ color: '#6366f1', '&.Mui-checked': { color: '#6366f1' } }}
                         />
                       }
-                      label={<Typography variant="body2">{perm.name}</Typography>}
+                      label={<Typography variant="body2" sx={{ fontSize: '0.825rem', color: '#334155' }}>{perm.name}</Typography>}
                     />
                   ))}
                 </FormGroup>
-              </Stack>
-            )}
+              </Box>
+            </Stack>
           </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={() => setEditDialogOpen(false)} color="inherit">
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setEditDialogOpen(false)} variant="outlined" sx={{ borderRadius: '8px' }}>
               Cancel
             </Button>
-            <Button type="submit" variant="contained" disabled={updateMutation.isPending}>
-              Apply Changes
+            <Button type="submit" variant="contained" color="primary" disabled={updateMutation.isPending} sx={{ borderRadius: '8px', fontWeight: 700 }}>
+              Save Changes
             </Button>
           </DialogActions>
         </form>
@@ -649,7 +684,7 @@ export const Users: React.FC = () => {
         autoHideDuration={4000}
         onClose={() => setNotification((n) => ({ ...n, open: false }))}
       >
-        <Alert severity={notification.severity} variant="filled">
+        <Alert severity={notification.severity} variant="filled" sx={{ width: '100%', borderRadius: '10px' }}>
           {notification.message}
         </Alert>
       </Snackbar>
