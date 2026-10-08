@@ -5,6 +5,7 @@ import {
   getDowntimeRecords,
   getPlants,
   getMachines,
+  getDowntimeCategories,
   getHolidays,
   getProductionPlans,
   createDowntimeRecord,
@@ -12,7 +13,8 @@ import {
   shiftMachinePlansByWorkingDays,
   hasActiveJobOnDate,
   toLocalDateString,
-  parseLocalDate
+  parseLocalDate,
+  type DowntimeCategory
 } from '../services/db';
 import {
   Box,
@@ -130,6 +132,12 @@ export const MachineDowntime: React.FC = () => {
     enabled: !!tenantId,
   });
 
+  const { data: categories = [] } = useQuery({
+    queryKey: ['downtimeCategories', tenantId],
+    queryFn: () => getDowntimeCategories(tenantId),
+    enabled: !!tenantId,
+  });
+
   const { data: holidays = [] } = useQuery({
     queryKey: ['holidays', tenantId],
     queryFn: () => getHolidays(tenantId),
@@ -142,22 +150,35 @@ export const MachineDowntime: React.FC = () => {
     enabled: !!tenantId,
   });
 
+  // Category Lookup Map
+  const categoryMap = useMemo(() => {
+    const map: Record<string, DowntimeCategory> = {};
+    categories.forEach(c => { map[c.id] = c; });
+    return map;
+  }, [categories]);
+
   // ----------------------------------------------------
-  // SIMPLIFIED DOWNTIME ENTRY FORM STATE
-  // (Just Machine, Date, and Remarks)
+  // DOWNTIME ENTRY FORM STATE (Machine, Category, Date, Remarks)
   // ----------------------------------------------------
   const [formData, setFormData] = useState({
     machineId: '',
+    categoryId: '',
     date: todayStr,
     remarks: '',
   });
 
-  // Set default machine once loaded
+  // Set default machine and category once loaded
   React.useEffect(() => {
     if (machines.length > 0 && !formData.machineId) {
       setFormData(prev => ({ ...prev, machineId: machines[0].id }));
     }
   }, [machines, formData.machineId]);
+
+  React.useEffect(() => {
+    if (categories.length > 0 && !formData.categoryId) {
+      setFormData(prev => ({ ...prev, categoryId: categories[0].id }));
+    }
+  }, [categories, formData.categoryId]);
 
   // Check if selected machine has an active job planned on the selected date
   const isJobActiveOnDate = useMemo(() => {
@@ -172,7 +193,6 @@ export const MachineDowntime: React.FC = () => {
 
   // ----------------------------------------------------
   // MUTATION: ADD DOWNTIME
-  // Only shift jobs if there is an active job on that machine on that specific date!
   // ----------------------------------------------------
   const addDowntimeMutation = useMutation({
     mutationFn: async () => {
@@ -181,6 +201,10 @@ export const MachineDowntime: React.FC = () => {
 
       const mach = machines.find(m => m.id === formData.machineId);
       const plantId = mach?.plantId || plants[0]?.id || 'default_plant';
+      const catId = formData.categoryId || (categories[0]?.id ?? 'downtime_event');
+      const catObj = categoryMap[catId] || categories.find(c => c.id === catId);
+      const catName = catObj?.name || 'General Downtime';
+
       const dDate = parseLocalDate(formData.date);
       const startTime = new Date(dDate.getTime() + 8 * 3600000); // 08:00 default
       const endTime = new Date(startTime.getTime() + 8 * 3600000); // full shift default (8 hrs)
@@ -190,14 +214,14 @@ export const MachineDowntime: React.FC = () => {
         tenantId,
         plantId,
         machineId: formData.machineId,
-        categoryId: 'downtime_event',
+        categoryId: catId,
         shift: 'General',
         dateStr: formData.date,
         startTime,
         endTime,
-        duration: 480, // standard duration
-        reason: formData.remarks || 'Machine Downtime / Breakdown',
-        remarks: formData.remarks || 'Unplanned Downtime',
+        duration: 480, // standard duration (8 hrs)
+        reason: formData.remarks || catName,
+        remarks: formData.remarks || catName,
         createdBy: operatorName
       });
 
@@ -272,6 +296,7 @@ export const MachineDowntime: React.FC = () => {
     return filteredRecords.map((r, idx) => {
       const p = plants.find(plant => plant.id === r.plantId);
       const m = machines.find(mach => mach.id === r.machineId);
+      const c = categoryMap[r.categoryId] || categories.find(cat => cat.id === r.categoryId);
       const dStr = toLocalDateString(r.startTime);
 
       return {
@@ -281,12 +306,13 @@ export const MachineDowntime: React.FC = () => {
         plantName: p?.plantName || 'Plant',
         machineCode: m?.machineCode || 'Line',
         machineName: m?.machineName || 'Machine',
+        categoryName: c?.name || (r.categoryId === 'downtime_event' ? 'General Breakdown' : (r.categoryId || 'Uncategorized')),
         remarks: r.remarks || r.reason || '—',
         createdBy: r.createdBy || 'Operator',
         actions: 'DELETE'
       };
     });
-  }, [filteredRecords, plants, machines]);
+  }, [filteredRecords, plants, machines, categoryMap, categories]);
 
   // ----------------------------------------------------
   // PROPERLY FORMATTED EXCEL REPORT EXPORT
@@ -304,6 +330,7 @@ export const MachineDowntime: React.FC = () => {
         'Plant',
         'Machine Code',
         'Machine Name',
+        'Downtime Category',
         'Remarks / Reason',
         'Logged By'
       ]
@@ -312,6 +339,7 @@ export const MachineDowntime: React.FC = () => {
     const reportRows = filteredRecords.map((r, idx) => {
       const p = plants.find(plant => plant.id === r.plantId);
       const m = machines.find(mach => mach.id === r.machineId);
+      const c = categoryMap[r.categoryId] || categories.find(cat => cat.id === r.categoryId);
       const dStr = toLocalDateString(r.startTime);
 
       return [
@@ -320,6 +348,7 @@ export const MachineDowntime: React.FC = () => {
         p?.plantName || 'N/A',
         m?.machineCode || 'N/A',
         m?.machineName || 'N/A',
+        c?.name || 'Uncategorized',
         r.remarks || r.reason || '—',
         r.createdBy || 'Operator'
       ];
@@ -332,11 +361,12 @@ export const MachineDowntime: React.FC = () => {
     ws['!cols'] = [
       { wch: 6 },
       { wch: 14 },
-      { wch: 20 },
+      { wch: 18 },
       { wch: 16 },
-      { wch: 24 },
-      { wch: 45 },
-      { wch: 20 }
+      { wch: 22 },
+      { wch: 22 },
+      { wch: 40 },
+      { wch: 18 }
     ];
 
     const wb = XLSX.utils.book_new();
@@ -352,10 +382,10 @@ export const MachineDowntime: React.FC = () => {
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 1 }}>
             <BuildIcon sx={{ color: '#ef4444', fontSize: 28 }} />
-            Downtime
+            Downtime Logging
           </Typography>
           <Typography variant="body2" sx={{ color: '#64748b', mt: 0.3 }}>
-            Log machine stoppages. If jobs exist on the downtime date, schedule is shifted forward by 1 working day (skipping holidays).
+            Log machine stoppages by category. If jobs exist on the downtime date, schedule is shifted forward by 1 working day (skipping holidays).
           </Typography>
         </Box>
 
@@ -372,14 +402,13 @@ export const MachineDowntime: React.FC = () => {
         </Stack>
       </Box>
 
-      {/* SECTION 1: VERTICAL DOWNTIME ENTRY FORM */}
-      {/* Just Machine, Date, and Remarks */}
+      {/* SECTION 1: DOWNTIME ENTRY FORM */}
       <Card sx={{ mb: 3, borderRadius: '16px', border: '1.5px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 2px 10px rgba(0, 0, 0, 0.03)' }}>
         <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
           <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 1 }}>
               <PlaylistAddIcon sx={{ color: '#ef4444' }} />
-              Log Downtime
+              Log Downtime Event
             </Typography>
             {formData.machineId && (
               <Chip
@@ -396,9 +425,9 @@ export const MachineDowntime: React.FC = () => {
           </Box>
 
           <form onSubmit={(e) => { e.preventDefault(); addDowntimeMutation.mutate(); }}>
-            <Grid container spacing={2.5}>
+            <Grid container spacing={2}>
               {/* Select Machine */}
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                 <FormControl fullWidth size="small" required>
                   <InputLabel>Select Machine</InputLabel>
                   <Select
@@ -418,8 +447,30 @@ export const MachineDowntime: React.FC = () => {
                 </FormControl>
               </Grid>
 
+              {/* Select Downtime Category */}
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                <FormControl fullWidth size="small" required>
+                  <InputLabel>Downtime Category</InputLabel>
+                  <Select
+                    label="Downtime Category"
+                    value={formData.categoryId}
+                    onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                  >
+                    {categories.length > 0 ? (
+                      categories.map(c => (
+                        <MenuItem key={c.id} value={c.id}>
+                          {c.name}
+                        </MenuItem>
+                      ))
+                    ) : (
+                      <MenuItem value="downtime_event">General Breakdown / Maintenance</MenuItem>
+                    )}
+                  </Select>
+                </FormControl>
+              </Grid>
+
               {/* Select Date */}
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                 <TextField
                   label="Downtime Date"
                   type="date"
@@ -432,11 +483,11 @@ export const MachineDowntime: React.FC = () => {
                 />
               </Grid>
 
-              {/* Remarks */}
-              <Grid size={{ xs: 12, md: 4 }}>
+              {/* Remarks / Reason */}
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                 <TextField
-                  label="Remarks / Reason"
-                  placeholder="e.g. Electrical breakdown, routine maintenance, motor failure"
+                  label="Remarks / Specific Reason"
+                  placeholder="e.g. Bearing failure, hydraulic leak"
                   size="small"
                   fullWidth
                   value={formData.remarks}
@@ -470,7 +521,7 @@ export const MachineDowntime: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* SECTION 2: VIEW OF DOWNTIME ENTRIES (HANDSONTABLE) */}
+      {/* SECTION 2: VIEW OF DOWNTIME ENTRIES (HANDSONTABLE WITH DOWNTIME CATEGORY COLUMN) */}
       <Card sx={{ borderRadius: '16px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
         <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
           {/* Table Header & Range Filters (7 Days, 14 Days, 31 Days, All) */}
@@ -481,7 +532,7 @@ export const MachineDowntime: React.FC = () => {
                 Downtime Entries Log ({filteredRecords.length})
               </Typography>
               <Typography variant="caption" sx={{ color: '#64748b' }}>
-                View-only spreadsheet. Use quick presets or custom date filters below.
+                View-only spreadsheet with category details. Use quick presets or custom date filters below.
               </Typography>
             </Box>
 
@@ -590,6 +641,7 @@ export const MachineDowntime: React.FC = () => {
                   'Plant',
                   'Machine Code',
                   'Machine Name',
+                  'Downtime Category',
                   'Remarks / Reason',
                   'Logged By',
                   'Action'
@@ -597,10 +649,11 @@ export const MachineDowntime: React.FC = () => {
                 columns={[
                   { data: 'rowNum', type: 'numeric', width: 45, className: 'htCenter htMiddle', readOnly: true },
                   { data: 'date', type: 'text', width: 110, className: 'htCenter htMiddle', readOnly: true },
-                  { data: 'plantName', type: 'text', width: 140, className: 'htMiddle', readOnly: true },
+                  { data: 'plantName', type: 'text', width: 130, className: 'htMiddle', readOnly: true },
                   { data: 'machineCode', type: 'text', width: 120, className: 'htCenter htMiddle', readOnly: true },
-                  { data: 'machineName', type: 'text', width: 170, className: 'htMiddle', readOnly: true },
-                  { data: 'remarks', type: 'text', width: 280, className: 'htMiddle', readOnly: true },
+                  { data: 'machineName', type: 'text', width: 160, className: 'htMiddle', readOnly: true },
+                  { data: 'categoryName', type: 'text', width: 170, className: 'htMiddle', readOnly: true },
+                  { data: 'remarks', type: 'text', width: 260, className: 'htMiddle', readOnly: true },
                   { data: 'createdBy', type: 'text', width: 130, className: 'htCenter htMiddle', readOnly: true },
                   {
                     data: 'actions',

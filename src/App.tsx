@@ -87,7 +87,7 @@ function App() {
 
               // Create Tenant Profile
               await setDoc(doc(db, 'tenants', tenantId), {
-                companyName: 'Main Plant Operations',
+                companyName: "Riley's Plant Operations",
                 subscriptionPlan: 'ENTERPRISE',
                 status: 'ACTIVE',
                 createdAt: new Date(),
@@ -96,7 +96,7 @@ function App() {
               // Create User Profile
               await setDoc(doc(db, 'users', user.uid), {
                 tenantId,
-                name: 'Administrator',
+                name: 'Riley Administrator',
                 email: 'admin@gmail.com',
                 roleId: 'tenant_admin',
                 status: 'ACTIVE',
@@ -113,7 +113,7 @@ function App() {
               const profile = {
                 id: user.uid,
                 tenantId,
-                name: 'Administrator',
+                name: 'Riley Administrator',
                 email: 'admin@gmail.com',
                 roleId: 'tenant_admin',
                 status: 'ACTIVE',
@@ -122,7 +122,7 @@ function App() {
 
               const tenant = {
                 id: tenantId,
-                companyName: 'Main Plant Operations',
+                companyName: "Riley's Plant Operations",
                 subscriptionPlan: 'ENTERPRISE',
                 status: 'ACTIVE',
                 createdAt: new Date(),
