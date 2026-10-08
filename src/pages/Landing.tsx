@@ -20,6 +20,7 @@ import {
   Stack,
   Chip,
 } from '@mui/material';
+import { RileysLogo } from '../components/RileysLogo';
 
 // Icons
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -39,8 +40,8 @@ export const Landing: React.FC = () => {
   const { profile, tenant, role, hasPermission } = useAuthStore();
   const tenantId = tenant?.id || '';
 
-  const welcomeName = profile?.name || 'Riley Operator';
-  const companyName = tenant?.companyName || "Riley's Plant Operations";
+  const welcomeName = profile?.name || 'Operator';
+  const companyName = tenant?.companyName || "Production Operations";
   const roleName = role?.name || 'Administrator';
 
   // Live Metric Telemetry
@@ -181,38 +182,11 @@ export const Landing: React.FC = () => {
       >
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ alignItems: { xs: 'flex-start', md: 'center' }, justifyContent: 'space-between' }}>
           <Stack direction="row" spacing={2.2} sx={{ alignItems: 'center' }}>
-            {/* Monogram Badge */}
-            <Box
-              sx={{
-                width: { xs: 52, sm: 62 },
-                height: { xs: 52, sm: 62 },
-                borderRadius: '18px',
-                background: 'linear-gradient(135deg, #6366f1 0%, #10b981 100%)',
-                p: '2px',
-                display: 'flex',
-                boxShadow: '0 6px 18px rgba(99, 102, 241, 0.3)'
-              }}
-            >
-              <Box
-                sx={{
-                  width: '100%',
-                  height: '100%',
-                  bgcolor: '#0f172a',
-                  borderRadius: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Typography sx={{ fontWeight: 900, fontSize: { xs: '1.4rem', sm: '1.75rem' }, color: '#ffffff', fontFamily: '"Outfit", sans-serif' }}>
-                  R
-                </Typography>
-              </Box>
-            </Box>
+            <RileysLogo size="lg" variant="icon" themeMode="sidebar" />
 
             <Box>
               <Typography variant="h4" sx={{ fontWeight: 900, color: '#0f172a', letterSpacing: '-0.03em', fontSize: { xs: '1.4rem', sm: '1.75rem' }, fontFamily: '"Outfit", sans-serif' }}>
-                Riley’s Production Planning
+                Production Planning & Operations
               </Typography>
               <Typography variant="body2" sx={{ color: '#64748b', mt: 0.3, fontWeight: 500 }}>
                 Welcome back, {welcomeName} • Operations Dashboard & Manufacturing Suite
@@ -278,7 +252,7 @@ export const Landing: React.FC = () => {
       {/* Operations Hub Navigation Modules */}
       <Box sx={{ mb: 2 }}>
         <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a', mb: 0.5, fontFamily: '"Outfit", sans-serif' }}>
-          Riley’s Operations Hub Modules
+          Production & Planning Modules
         </Typography>
         <Typography variant="body2" sx={{ color: '#64748b', mb: 2.5 }}>
           Launch planning workspaces, track live daily outputs, inspect downtime telemetry, and configure master data.

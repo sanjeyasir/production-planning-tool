@@ -4,6 +4,8 @@ import { useAuthStore } from '../store/authStore';
 import { Box, CircularProgress, Typography, Button, Container, Paper } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 
+import { RileysLogo } from './RileysLogo';
+
 interface GuardedRouteProps {
   children: React.ReactNode;
   module?: string;
@@ -14,13 +16,27 @@ export const GuardedRoute: React.FC<GuardedRouteProps> = ({ children, module, ac
   const { user, loading, hasPermission, profile } = useAuthStore();
   const location = useLocation();
 
-  if (loading) {
+  if (loading || (user && !profile)) {
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', bgcolor: '#0d0e12', color: '#fff' }}>
-        <CircularProgress size={60} thickness={4.5} sx={{ color: '#6366f1' }} />
-        <Typography variant="h6" sx={{ mt: 3, fontWeight: 500, letterSpacing: 0.5 }}>
-          Loading MOIP Session...
-        </Typography>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '100vh',
+          background: 'radial-gradient(circle at 50% 50%, rgba(220, 38, 38, 0.15) 0%, rgba(10, 4, 6, 0.98) 70%), #0a0406',
+          color: '#ffffff',
+          gap: 2.5,
+        }}
+      >
+        <RileysLogo size="lg" themeMode="red" variant="full" />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 1 }}>
+          <CircularProgress size={28} thickness={4.5} sx={{ color: '#ef4444' }} />
+          <Typography variant="body1" sx={{ fontWeight: 700, color: '#fca5a5', letterSpacing: '0.02em', fontSize: '0.95rem' }}>
+            Loading Dashboard Session...
+          </Typography>
+        </Box>
       </Box>
     );
   }

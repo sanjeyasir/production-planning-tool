@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
+import { RileysLogo } from './RileysLogo';
 import {
   Box,
   Drawer,
@@ -36,7 +37,6 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import BarChartIcon from '@mui/icons-material/BarChart';
-import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturing';
 import PeopleIcon from '@mui/icons-material/People';
 import BusinessIcon from '@mui/icons-material/Business';
 import CategoryIcon from '@mui/icons-material/Category';
@@ -254,97 +254,18 @@ export const Layout: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: open ? 'space-between' : 'center',
-          px: open ? 2.5 : 1,
+          px: open ? 2 : 1,
           borderBottom: '1px solid #e2e8f0',
           background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
         }}
       >
         {open ? (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            {/* Riley's Monogram */}
-            <Box
-              sx={{
-                width: 38,
-                height: 38,
-                borderRadius: '11px',
-                background: 'linear-gradient(135deg, #6366f1 0%, #10b981 100%)',
-                p: '1.5px',
-                display: 'flex',
-                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)',
-              }}
-            >
-              <Box
-                sx={{
-                  width: '100%',
-                  height: '100%',
-                  bgcolor: '#0f172a',
-                  borderRadius: '10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Typography sx={{ fontWeight: 900, fontSize: '1.15rem', fontFamily: '"Outfit", sans-serif', color: '#ffffff', letterSpacing: '-0.03em' }}>
-                  R
-                </Typography>
-              </Box>
-            </Box>
-
-            <Box>
-              <Typography
-                variant="subtitle1"
-                sx={{
-                  fontWeight: 900,
-                  color: '#0f172a',
-                  lineHeight: 1.1,
-                  fontSize: '1.05rem',
-                  fontFamily: '"Outfit", sans-serif',
-                  letterSpacing: '-0.02em',
-                }}
-              >
-                Riley’s
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={{
-                  color: '#6366f1',
-                  fontSize: '0.65rem',
-                  letterSpacing: '0.06em',
-                  fontWeight: 800,
-                  textTransform: 'uppercase',
-                  display: 'block'
-                }}
-              >
-                Production OS
-              </Typography>
-            </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+            <RileysLogo size="sm" variant="full" themeMode="sidebar" />
           </Box>
         ) : (
-          <Box
-            sx={{
-              width: 36,
-              height: 36,
-              borderRadius: '10px',
-              background: 'linear-gradient(135deg, #6366f1 0%, #10b981 100%)',
-              p: '1.5px',
-              display: 'flex',
-            }}
-          >
-            <Box
-              sx={{
-                width: '100%',
-                height: '100%',
-                bgcolor: '#0f172a',
-                borderRadius: '9px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Typography sx={{ fontWeight: 900, fontSize: '1.1rem', color: '#ffffff' }}>
-                R
-              </Typography>
-            </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <RileysLogo size="sm" variant="icon" themeMode="sidebar" />
           </Box>
         )}
 
@@ -573,23 +494,27 @@ export const Layout: React.FC = () => {
               </IconButton>
             )}
 
-            {/* Riley's Hub Header */}
-            <Typography
-              variant="subtitle1"
-              sx={{
-                fontWeight: 900,
-                color: '#0f172a',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-                fontFamily: '"Outfit", sans-serif',
-                letterSpacing: '-0.02em',
-                fontSize: { xs: '1rem', sm: '1.15rem' }
-              }}
-            >
-              <PrecisionManufacturingIcon sx={{ fontSize: 22, color: '#6366f1' }} />
-              Riley’s Operations Hub
-            </Typography>
+            {/* App Title Header without Riley's */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {(!open || !isDesktop) && (
+                <RileysLogo size="sm" variant="icon" themeMode="sidebar" />
+              )}
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  fontWeight: 800,
+                  color: '#0f172a',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.8,
+                  fontFamily: '"Outfit", sans-serif',
+                  letterSpacing: '-0.02em',
+                  fontSize: { xs: '0.95rem', sm: '1.1rem' }
+                }}
+              >
+                Production & Planning
+              </Typography>
+            </Box>
 
             {/* Active Shift Indicator */}
             <Chip
@@ -659,7 +584,7 @@ export const Layout: React.FC = () => {
             )}
 
             {/* User Profile Avatar */}
-            <Tooltip title="Riley's User Profile">
+            <Tooltip title="User Profile">
               <IconButton onClick={handleProfileMenuOpen} sx={{ p: 0.5 }}>
                 <Avatar
                   sx={{
