@@ -6,8 +6,10 @@ import {
   getDowntimeCategories,
   createProductionCategory,
   updateProductionCategory,
+  deleteProductionCategory,
   createDowntimeCategory,
   updateDowntimeCategory,
+  deleteDowntimeCategory,
   logActivity,
   type ProductionCategory,
   type DowntimeCategory
@@ -18,13 +20,6 @@ import {
   CardContent,
   Typography,
   Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -38,21 +33,24 @@ import {
   CircularProgress,
   Snackbar,
   Alert,
-  Tooltip,
   Tabs,
   Tab,
   Chip,
-  Paper,
   InputAdornment
 } from '@mui/material';
 
-import EditIcon from '@mui/icons-material/Edit';
 import AddIcon from '@mui/icons-material/Add';
-import ToggleOnIcon from '@mui/icons-material/ToggleOn';
-import ToggleOffIcon from '@mui/icons-material/ToggleOff';
 import CategoryIcon from '@mui/icons-material/Category';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SearchIcon from '@mui/icons-material/Search';
+import TableViewIcon from '@mui/icons-material/TableView';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import CloudDoneIcon from '@mui/icons-material/CloudDone';
+
+// Handsontable
+import { HotTable } from '@handsontable/react';
+import * as XLSX from 'xlsx';
 
 export const Categories: React.FC = () => {
   const queryClient = useQueryClient();
@@ -65,7 +63,7 @@ export const Categories: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
 
   // Notifications
-  const [notification, setNotification] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+  const [notification, setNotification] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'warning' }>({
     open: false,
     message: '',
     severity: 'success'
@@ -104,6 +102,49 @@ export const Categories: React.FC = () => {
       return name.includes(match) || desc.includes(match);
     });
   }, [prodCats, dtCats, tabValue, search]);
+
+  // Handsontable Data
+  const hotData = useMemo(() => {
+    return filteredItems.map((item, index) => ({
+      rowNum: index + 1,
+      id: item.id,
+      name: item.name,
+      description: item.description || '',
+      status: item.status || 'ACTIVE',
+      action: 'DELETE',
+    }));
+  }, [filteredItems]);
+
+  // Handsontable In-Place Cell Edit & Auto-Save Handler
+  const handleAfterChange = async (changes: any[] | null, source: string) => {
+    if (source === 'loadData' || !changes || changes.length === 0) return;
+
+    for (const [row, prop, oldValue, newValue] of changes) {
+      if (oldValue === newValue) continue;
+      const rowData = hotData[row];
+      if (!rowData || !rowData.id) continue;
+
+      try {
+        const updatePayload: any = {};
+        if (prop === 'name') updatePayload.name = String(newValue || '').trim();
+        if (prop === 'description') updatePayload.description = String(newValue || '').trim();
+        if (prop === 'status') updatePayload.status = newValue === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE';
+
+        if (Object.keys(updatePayload).length > 0) {
+          if (tabValue === 0) {
+            await updateProductionCategory(rowData.id, updatePayload);
+            queryClient.invalidateQueries({ queryKey: ['productionCategories', tenantId] });
+          } else {
+            await updateDowntimeCategory(rowData.id, updatePayload);
+            queryClient.invalidateQueries({ queryKey: ['downtimeCategories', tenantId] });
+          }
+          setNotification({ open: true, message: `Category "${rowData.name}" updated & autosaved!`, severity: 'success' });
+        }
+      } catch (err: any) {
+        setNotification({ open: true, message: `Failed to autosave category: ${err.message}`, severity: 'error' });
+      }
+    }
+  };
 
   const handleOpenDialog = (item?: ProductionCategory | DowntimeCategory) => {
     if (item) {
@@ -178,6 +219,38 @@ export const Categories: React.FC = () => {
     }
   });
 
+  // Delete Confirmation Modal Popup State
+  const [deleteModal, setDeleteModal] = useState<{
+    open: boolean;
+    item: ProductionCategory | DowntimeCategory | null;
+  }>({
+    open: false,
+    item: null
+  });
+
+  const deleteProdMutation = useMutation({
+    mutationFn: async (item: ProductionCategory) => {
+      await deleteProductionCategory(item.id);
+      await logActivity(
+        tenantId,
+        userId,
+        userName,
+        'DELETE_PROD_CATEGORY',
+        `Deleted product category ${item.name}`,
+        item,
+        null
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['productionCategories', tenantId] });
+      setNotification({ open: true, message: 'Product category deleted.', severity: 'success' });
+      setDeleteModal({ open: false, item: null });
+    },
+    onError: (err: any) => {
+      setNotification({ open: true, message: `Failed to delete: ${err.message}`, severity: 'error' });
+    }
+  });
+
   const createDtMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
       const newId = await createDowntimeCategory({
@@ -231,29 +304,26 @@ export const Categories: React.FC = () => {
     }
   });
 
-  const toggleStatusMutation = useMutation({
-    mutationFn: async (item: ProductionCategory | DowntimeCategory) => {
-      const nextStatus = item.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-      if (tabValue === 0) {
-        await updateProductionCategory(item.id, { status: nextStatus as any });
-      } else {
-        await updateDowntimeCategory(item.id, { status: nextStatus as any });
-      }
-
+  const deleteDtMutation = useMutation({
+    mutationFn: async (item: DowntimeCategory) => {
+      await deleteDowntimeCategory(item.id);
       await logActivity(
         tenantId,
         userId,
         userName,
-        'TOGGLE_CATEGORY_STATUS',
-        `Toggled status of ${item.name} to ${nextStatus}`,
+        'DELETE_DT_CATEGORY',
+        `Deleted downtime category ${item.name}`,
         item,
-        { status: nextStatus }
+        null
       );
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['productionCategories', tenantId] });
       queryClient.invalidateQueries({ queryKey: ['downtimeCategories', tenantId] });
-      setNotification({ open: true, message: 'Status updated!', severity: 'success' });
+      setNotification({ open: true, message: 'Downtime category deleted.', severity: 'success' });
+      setDeleteModal({ open: false, item: null });
+    },
+    onError: (err: any) => {
+      setNotification({ open: true, message: `Failed to delete: ${err.message}`, severity: 'error' });
     }
   });
 
@@ -273,7 +343,23 @@ export const Categories: React.FC = () => {
     }
   };
 
+  const handleExportExcel = () => {
+    const sheetName = tabValue === 0 ? 'Product Categories' : 'Downtime Categories';
+    const data = filteredItems.map((item) => ({
+      'Category Name': item.name,
+      'Description': item.description || '',
+      'Status': item.status
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, `${sheetName.replace(/\s+/g, '_')}_Master.xlsx`);
+    setNotification({ open: true, message: `${sheetName} exported to Excel!`, severity: 'success' });
+  };
+
   const isPending = createProdMutation.isPending || updateProdMutation.isPending || createDtMutation.isPending || updateDtMutation.isPending;
+  const isLoading = tabValue === 0 ? loadingProd : loadingDowntime;
 
   return (
     <Box sx={{ py: 1 }}>
@@ -283,56 +369,80 @@ export const Categories: React.FC = () => {
             <CategoryIcon sx={{ color: '#6366f1' }} />
             Category Definitions Master
           </Typography>
-          <Typography variant="body2" sx={{ color: '#64748b', mt: 0.3 }}>
-            Manage manufacturing product classifications and shop-floor downtime root causes.
-          </Typography>
         </Box>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-          sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
-        >
-          {tabValue === 0 ? 'Add Product Category' : 'Add Downtime Category'}
-        </Button>
+        <Stack direction="row" spacing={1.5}>
+          <Button
+            variant="outlined"
+            startIcon={<FileDownloadIcon />}
+            onClick={handleExportExcel}
+            sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
+          >
+            Export Excel
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenDialog()}
+            sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
+          >
+            {tabValue === 0 ? 'Add Product Category' : 'Add Downtime Category'}
+          </Button>
+        </Stack>
       </Box>
 
-      {/* Tabs Menu */}
-      <Paper
-        sx={{
-          mb: 3,
-          borderRadius: '12px',
-          bgcolor: '#ffffff',
-          border: '1px solid #e2e8f0',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-          overflow: 'hidden'
-        }}
-      >
+      {/* Tabs */}
+      <Box sx={{ borderBottom: 1, borderColor: '#e2e8f0', mb: 3 }}>
         <Tabs
           value={tabValue}
-          onChange={(_, val) => {
-            setTabValue(val);
-            setSearch('');
-          }}
+          onChange={(_, val) => setTabValue(val)}
           sx={{
-            px: 1.5,
-            '& .MuiTab-root': { minHeight: 48, fontSize: '0.85rem' }
+            '& .MuiTab-root': {
+              fontWeight: 700,
+              fontSize: '0.9rem',
+              textTransform: 'none',
+              minHeight: 48,
+              color: '#64748b',
+              '&.Mui-selected': {
+                color: '#6366f1',
+              },
+            },
+            '& .MuiTabs-indicator': {
+              bgcolor: '#6366f1',
+              height: 3,
+              borderRadius: '3px 3px 0 0',
+            },
           }}
         >
-          <Tab icon={<CategoryIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Product Categories" />
-          <Tab icon={<SettingsIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Downtime Stoppage Categories" />
+          <Tab icon={<CategoryIcon sx={{ fontSize: 18, mr: 0.5 }} />} iconPosition="start" label={`Product Categories (${prodCats.length})`} />
+          <Tab icon={<SettingsIcon sx={{ fontSize: 18, mr: 0.5 }} />} iconPosition="start" label={`Downtime Categories (${dtCats.length})`} />
         </Tabs>
-      </Paper>
+      </Box>
 
-      {/* Main Table Card */}
-      <Card sx={{ borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-        <CardContent sx={{ p: 2.5 }}>
-          <Box sx={{ pb: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
+      {/* Main Card with Handsontable */}
+      {/* Main Card with Handsontable and Controls */}
+      <Card sx={{ borderRadius: '16px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+          <Box sx={{ pb: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+            <Box>
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <TableViewIcon sx={{ color: '#6366f1' }} />
+                  {tabValue === 0 ? 'Product Categories Directory' : 'Downtime Categories Directory'}
+                </Typography>
+                <Chip
+                  icon={<CloudDoneIcon sx={{ fontSize: '15px !important', color: '#16a34a' }} />}
+                  label="In-place edit • Auto-saves instantly"
+                  size="small"
+                  sx={{ bgcolor: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', fontWeight: 600, fontSize: '0.75rem' }}
+                />
+              </Stack>
+            </Box>
+
             <TextField
-              placeholder="Search categories by title..."
+              placeholder="Search category name or description..."
               size="small"
-              sx={{ width: { xs: '100%', sm: 320 } }}
+              sx={{ width: { xs: '100%', sm: 300 } }}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               slotProps={{
@@ -347,72 +457,143 @@ export const Categories: React.FC = () => {
             />
           </Box>
 
-          <TableContainer sx={{ border: '1px solid #e2e8f0', borderRadius: '10px' }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Category Name</TableCell>
-                  <TableCell>Description</TableCell>
-                  <TableCell align="center">Status</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredItems.length > 0 ? (
-                  filteredItems.map((item) => (
-                    <TableRow key={item.id} hover>
-                      <TableCell sx={{ fontWeight: 700, color: '#0f172a' }}>
-                        {item.name}
-                      </TableCell>
-                      <TableCell sx={{ color: '#64748b' }}>
-                        {item.description || 'No description provided'}
-                      </TableCell>
-                      <TableCell align="center">
-                        <Chip
-                          size="small"
-                          label={item.status}
-                          sx={{
-                            fontWeight: 700,
-                            bgcolor: item.status === 'ACTIVE' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                            color: item.status === 'ACTIVE' ? '#059669' : '#dc2626',
-                            fontSize: '0.7rem'
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', alignItems: 'center' }}>
-                          <Tooltip title="Toggle Status">
-                            <IconButton onClick={() => toggleStatusMutation.mutate(item)} size="small">
-                              {item.status === 'ACTIVE' ? (
-                                <ToggleOnIcon sx={{ color: '#10b981', fontSize: 26 }} />
-                              ) : (
-                                <ToggleOffIcon sx={{ color: '#94a3b8', fontSize: 26 }} />
-                              )}
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Edit Category">
-                            <IconButton onClick={() => handleOpenDialog(item)} size="small" sx={{ color: '#6366f1' }}>
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={4} align="center" sx={{ py: 6, color: '#64748b' }}>
-                      {loadingProd || loadingDowntime ? <CircularProgress size={30} /> : 'No categories configured.'}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          {/* Handsontable Grid Container */}
+          <Box
+            sx={{
+              width: '100%',
+              borderRadius: '12px',
+              border: '1px solid #e2e8f0',
+              '& .handsontable': {
+                fontFamily: 'inherit',
+                fontSize: '0.85rem'
+              },
+              '& .htCore th': {
+                bgcolor: '#f8fafc',
+                color: '#0f172a',
+                fontWeight: 700,
+                py: 1.2
+              },
+              '& .htCore td': {
+                py: 1,
+                color: '#334155'
+              }
+            }}
+          >
+            {isLoading ? (
+              <Box sx={{ py: 6, textAlign: 'center' }}>
+                <CircularProgress size={32} />
+              </Box>
+            ) : hotData.length > 0 ? (
+              <HotTable
+                data={hotData}
+                colHeaders={['#', 'Category Name', 'Description / Details', 'Status', 'Action']}
+                columns={[
+                  { data: 'rowNum', readOnly: true, width: 50, className: 'htCenter htMiddle' },
+                  { data: 'name', type: 'text', width: 280, className: 'htMiddle' },
+                  { data: 'description', type: 'text', width: 340, className: 'htMiddle' },
+                  {
+                    data: 'status',
+                    type: 'dropdown',
+                    source: ['ACTIVE', 'INACTIVE'],
+                    width: 140,
+                    className: 'htCenter htMiddle'
+                  },
+                  {
+                    data: 'action',
+                    readOnly: true,
+                    width: 100,
+                    className: 'htCenter htMiddle',
+                    renderer: (_instance: any, td: HTMLTableCellElement) => {
+                      td.innerHTML = '<button type="button" style="background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; border-radius: 6px; padding: 4px 12px; font-weight: 700; font-size: 11px; cursor: pointer;">Delete</button>';
+                      td.className = 'htCenter htMiddle';
+                      return td;
+                    }
+                  }
+                ]}
+                afterChange={handleAfterChange}
+                afterOnCellMouseDown={(event: any, coords: any) => {
+                  if (coords.col === 4 && coords.row >= 0) {
+                    event.stopImmediatePropagation();
+                    const rowData = hotData[coords.row];
+                    const itemObj = filteredItems.find((i) => i.id === rowData?.id);
+                    if (itemObj) {
+                      setDeleteModal({ open: true, item: itemObj });
+                    }
+                  }
+                }}
+                rowHeaders={true}
+                height="auto"
+                width="100%"
+                colWidths={[50, 280, 340, 140, 100]}
+                stretchH="all"
+                autoWrapRow={true}
+                autoWrapCol={true}
+                columnSorting={true}
+                filters={true}
+                dropdownMenu={true}
+                contextMenu={['copy']}
+                licenseKey="non-commercial-and-evaluation"
+              />
+            ) : (
+              <Box sx={{ py: 6, textAlign: 'center', color: '#64748b' }}>
+                No categories found. Click button above to create a new category.
+              </Box>
+            )}
+          </Box>
         </CardContent>
       </Card>
 
-      {/* Category Dialog */}
+      {/* CONFIRM DELETE MODAL POPUP (NOT BROWSER ALERT) */}
+      <Dialog
+        open={deleteModal.open}
+        onClose={() => !(deleteProdMutation.isPending || deleteDtMutation.isPending) && setDeleteModal({ open: false, item: null })}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{ paper: { sx: { borderRadius: '16px', p: 1 } } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: '#0f172a', pb: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box sx={{ width: 40, height: 40, borderRadius: '50%', bgcolor: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <DeleteForeverIcon sx={{ color: '#dc2626' }} />
+          </Box>
+          Confirm Category Deletion
+        </DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Typography variant="body2" sx={{ color: '#475569', lineHeight: 1.6 }}>
+            Are you sure you want to delete {tabValue === 0 ? 'product category' : 'downtime reason category'} <strong>"{deleteModal.item?.name}"</strong>?
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block', mt: 1 }}>
+            This action cannot be undone and will permanently remove this category master record.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5, pt: 1 }}>
+          <Button
+            onClick={() => setDeleteModal({ open: false, item: null })}
+            variant="outlined"
+            disabled={deleteProdMutation.isPending || deleteDtMutation.isPending}
+            sx={{ borderRadius: '8px', textTransform: 'none', color: '#64748b' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => {
+              if (!deleteModal.item) return;
+              if (tabValue === 0) {
+                deleteProdMutation.mutate(deleteModal.item as ProductionCategory);
+              } else {
+                deleteDtMutation.mutate(deleteModal.item as DowntimeCategory);
+              }
+            }}
+            variant="contained"
+            color="error"
+            disabled={deleteProdMutation.isPending || deleteDtMutation.isPending}
+            sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 700, px: 2.5 }}
+          >
+            {deleteProdMutation.isPending || deleteDtMutation.isPending ? <CircularProgress size={18} color="inherit" /> : 'Yes, Delete Category'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Entry / Edit Dialog */}
       <Dialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
@@ -429,14 +610,16 @@ export const Categories: React.FC = () => {
         }}
       >
         <DialogTitle sx={{ fontWeight: 800, color: '#0f172a', pb: 1 }}>
-          {editingItem ? 'Edit Category' : `Create ${tabValue === 0 ? 'Product' : 'Downtime'} Category`}
+          {editingItem
+            ? `Edit ${tabValue === 0 ? 'Product Category' : 'Downtime Category'}`
+            : `Add ${tabValue === 0 ? 'Product Category' : 'Downtime Category'}`}
         </DialogTitle>
         <form onSubmit={handleSubmit}>
           <DialogContent sx={{ pt: 1 }}>
             <Stack spacing={2.5}>
               <TextField
                 label="Category Name"
-                placeholder={tabValue === 0 ? 'e.g. Cotton Fabrics' : 'e.g. Electrical Power Fluctuation'}
+                placeholder={tabValue === 0 ? 'e.g. Cotton Fabrics' : 'e.g. Mechanical Jam'}
                 size="small"
                 required
                 fullWidth
@@ -444,16 +627,16 @@ export const Categories: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               />
               <TextField
-                label="Description"
-                placeholder="Optional notes or classification details"
-                multiline
-                rows={3}
+                label="Description / Remarks"
+                placeholder="Optional details or specifications"
                 size="small"
                 fullWidth
+                multiline
+                rows={3}
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               />
-              <FormControl fullWidth size="small" required>
+              <FormControl fullWidth size="small">
                 <InputLabel>Status</InputLabel>
                 <Select
                   label="Status"
@@ -466,18 +649,17 @@ export const Categories: React.FC = () => {
               </FormControl>
             </Stack>
           </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button onClick={() => setDialogOpen(false)} variant="outlined" sx={{ borderRadius: '8px' }}>
+          <DialogActions sx={{ px: 3, pb: 2.5, pt: 1 }}>
+            <Button onClick={() => setDialogOpen(false)} sx={{ color: '#64748b', fontWeight: 600, textTransform: 'none' }}>
               Cancel
             </Button>
             <Button
               type="submit"
               variant="contained"
-              color="primary"
               disabled={isPending}
-              sx={{ borderRadius: '8px', fontWeight: 700 }}
+              sx={{ borderRadius: '8px', px: 3, fontWeight: 600, textTransform: 'none' }}
             >
-              {editingItem ? 'Save Changes' : 'Create Category'}
+              {isPending ? <CircularProgress size={20} color="inherit" /> : 'Save Category'}
             </Button>
           </DialogActions>
         </form>
@@ -488,10 +670,12 @@ export const Categories: React.FC = () => {
         autoHideDuration={4000}
         onClose={() => setNotification((n) => ({ ...n, open: false }))}
       >
-        <Alert severity={notification.severity} variant="filled" sx={{ width: '100%', borderRadius: '10px' }}>
+        <Alert severity={notification.severity} variant="filled">
           {notification.message}
         </Alert>
       </Snackbar>
     </Box>
   );
 };
+
+export default Categories;

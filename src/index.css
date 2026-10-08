@@ -67,3 +67,124 @@ body,
 .transition-all {
   transition: all 0.2s ease-in-out;
 }
+
+/* ==========================================================================
+   Handsontable Modern SaaS Theme & Clean Dropdown Styling
+   ========================================================================== */
+
+/* Main Table Container & Typography */
+.handsontable {
+  font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+  font-size: 0.875rem !important;
+  color: #1e293b !important;
+}
+
+/* Table Headers */
+.handsontable th {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  font-weight: 700 !important;
+  font-size: 0.82rem !important;
+  letter-spacing: 0.02em !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+  vertical-align: middle !important;
+}
+
+/* Table Cells */
+.handsontable td {
+  vertical-align: middle !important;
+  color: #334155 !important;
+  border-color: #f1f5f9 !important;
+}
+
+.handsontable tr:hover td {
+  background-color: #f8fafc !important;
+}
+
+/* Selection Borders & Focus */
+.handsontable .current {
+  background-color: rgba(99, 102, 241, 0.06) !important;
+}
+
+.handsontable .wtBorder.current {
+  background-color: #6366f1 !important;
+}
+
+.handsontable .wtBorder.area {
+  background-color: #6366f1 !important;
+}
+
+/* Autocomplete / Dropdown Arrow Button inside Cell */
+.handsontable .htAutocompleteArrow {
+  cursor: pointer !important;
+  color: #64748b !important;
+}
+
+.handsontable .htAutocompleteArrow:hover {
+  color: #0f172a !important;
+}
+
+/* Dropdown / Autocomplete Popup List Container */
+.handsontable.autocompleteEditor,
+.handsontable.listbox {
+  background: #ffffff !important;
+  border-radius: 8px !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.2), 0 8px 10px -6px rgba(15, 23, 42, 0.1) !important;
+  z-index: 999999 !important;
+}
+
+/* Dropdown Items (Rows/Cells) */
+.handsontable.autocompleteEditor .htCore td,
+.handsontable.listbox .htCore td {
+  cursor: pointer !important;
+  font-size: 0.875rem !important;
+  color: #1e293b !important;
+  vertical-align: middle !important;
+}
+
+/* Dropdown Item Hover & Active Highlight */
+.handsontable.autocompleteEditor .htCore td.current,
+.handsontable.autocompleteEditor .htCore tr:hover td,
+.handsontable.listbox .htCore td.current,
+.handsontable.listbox .htCore tr:hover td {
+  background-color: #3b82f6 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+/* Handsontable Context Menu & Filter Dropdowns */
+.htContextMenu,
+.htDropdownMenu {
+  background: #ffffff !important;
+  border-radius: 10px !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.2), 0 8px 10px -6px rgba(15, 23, 42, 0.1) !important;
+  z-index: 99999 !important;
+}
+
+/* Pikaday Date Picker (for Handsontable date column) */
+.pika-single {
+  background: #ffffff !important;
+  border-radius: 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.2), 0 8px 10px -6px rgba(15, 23, 42, 0.1) !important;
+  padding: 10px !important;
+  font-family: 'Outfit', 'Inter', sans-serif !important;
+  z-index: 99999 !important;
+}
+
+.pika-button {
+  border-radius: 6px !important;
+}
+
+.is-selected .pika-button {
+  background: #6366f1 !important;
+  color: #ffffff !important;
+}
+
+.is-today .pika-button {
+  color: #6366f1 !important;
+  font-weight: 700 !important;
+}
+

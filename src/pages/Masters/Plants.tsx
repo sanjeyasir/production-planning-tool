@@ -5,6 +5,7 @@ import {
   getPlants,
   createPlant,
   updatePlant,
+  deletePlant,
   logActivity,
   type Plant
 } from '../../services/db';
@@ -14,14 +15,6 @@ import {
   CardContent,
   Typography,
   Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Avatar,
-  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -35,17 +28,21 @@ import {
   CircularProgress,
   Snackbar,
   Alert,
-  Tooltip,
   Chip,
   InputAdornment
 } from '@mui/material';
 
-import EditIcon from '@mui/icons-material/Edit';
 import AddIcon from '@mui/icons-material/Add';
 import BusinessIcon from '@mui/icons-material/Business';
-import ToggleOnIcon from '@mui/icons-material/ToggleOn';
-import ToggleOffIcon from '@mui/icons-material/ToggleOff';
 import SearchIcon from '@mui/icons-material/Search';
+import TableViewIcon from '@mui/icons-material/TableView';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import CloudDoneIcon from '@mui/icons-material/CloudDone';
+
+// Handsontable
+import { HotTable } from '@handsontable/react';
+import * as XLSX from 'xlsx';
 
 export const Plants: React.FC = () => {
   const queryClient = useQueryClient();
@@ -55,7 +52,7 @@ export const Plants: React.FC = () => {
   const userName = profile?.name || '';
 
   // Notifications
-  const [notification, setNotification] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+  const [notification, setNotification] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'warning' }>({
     open: false,
     message: '',
     severity: 'success'
@@ -77,6 +74,7 @@ export const Plants: React.FC = () => {
     status: 'ACTIVE'
   });
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
 
   // Local filtering
   const filteredPlants = useMemo(() => {
@@ -84,9 +82,52 @@ export const Plants: React.FC = () => {
       const name = p.plantName.toLowerCase();
       const loc = p.location.toLowerCase();
       const match = search.toLowerCase();
-      return name.includes(match) || loc.includes(match);
+      const matchesSearch = name.includes(match) || loc.includes(match);
+      const matchesStatus = statusFilter === 'ALL' || (p.status || 'ACTIVE') === statusFilter;
+      return matchesSearch && matchesStatus;
     });
-  }, [plants, search]);
+  }, [plants, search, statusFilter]);
+
+  // Handsontable Data
+  const hotData = useMemo(() => {
+    return filteredPlants.map((p, index) => ({
+      rowNum: index + 1,
+      id: p.id,
+      name: p.plantName,
+      location: p.location,
+      status: p.status || 'ACTIVE',
+      action: 'DELETE',
+    }));
+  }, [filteredPlants]);
+
+  // Handsontable In-Place Cell Edit & Auto-Save Handler
+  const handleAfterChange = async (changes: any[] | null, source: string) => {
+    if (source === 'loadData' || !changes || changes.length === 0) return;
+
+    for (const [row, prop, oldValue, newValue] of changes) {
+      if (oldValue === newValue) continue;
+      const rowData = hotData[row];
+      if (!rowData || !rowData.id) continue;
+
+      try {
+        const updatePayload: any = {};
+        if (prop === 'name') updatePayload.plantName = String(newValue || '').trim();
+        if (prop === 'location') updatePayload.location = String(newValue || '').trim();
+        if (prop === 'status') {
+          const valUpper = String(newValue || '').trim().toUpperCase();
+          updatePayload.status = valUpper === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE';
+        }
+
+        if (Object.keys(updatePayload).length > 0) {
+          await updatePlant(rowData.id, updatePayload);
+          queryClient.invalidateQueries({ queryKey: ['plants', tenantId] });
+          setNotification({ open: true, message: `Plant "${rowData.name}" updated & autosaved!`, severity: 'success' });
+        }
+      } catch (err: any) {
+        setNotification({ open: true, message: `Failed to autosave plant: ${err.message}`, severity: 'error' });
+      }
+    }
+  };
 
   const handleOpenDialog = (plant?: Plant) => {
     if (plant) {
@@ -112,8 +153,8 @@ export const Plants: React.FC = () => {
     mutationFn: async () => {
       if (editingPlant) {
         await updatePlant(editingPlant.id, {
-          plantName: formData.plantName,
-          location: formData.location,
+          plantName: formData.plantName.trim(),
+          location: formData.location.trim(),
           status: formData.status
         });
         await logActivity(
@@ -128,8 +169,8 @@ export const Plants: React.FC = () => {
       } else {
         await createPlant({
           tenantId,
-          plantName: formData.plantName,
-          location: formData.location,
+          plantName: formData.plantName.trim(),
+          location: formData.location.trim(),
           status: formData.status
         });
         await logActivity(
@@ -161,23 +202,35 @@ export const Plants: React.FC = () => {
     }
   });
 
-  const toggleStatusMutation = useMutation({
+  // Delete Confirmation Modal Popup State
+  const [deleteModal, setDeleteModal] = useState<{
+    open: boolean;
+    plant: Plant | null;
+  }>({
+    open: false,
+    plant: null
+  });
+
+  const deletePlantMutation = useMutation({
     mutationFn: async (plant: Plant) => {
-      const nextStatus = plant.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-      await updatePlant(plant.id, { status: nextStatus });
+      await deletePlant(plant.id);
       await logActivity(
         tenantId,
         userId,
         userName,
-        'TOGGLE_PLANT_STATUS',
-        `Toggled plant ${plant.plantName} status to ${nextStatus}`,
+        'DELETE_PLANT',
+        `Deleted plant ${plant.plantName}`,
         plant,
-        { status: nextStatus }
+        null
       );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plants', tenantId] });
-      setNotification({ open: true, message: 'Status updated successfully!', severity: 'success' });
+      setNotification({ open: true, message: 'Plant deleted successfully.', severity: 'success' });
+      setDeleteModal({ open: false, plant: null });
+    },
+    onError: (err: any) => {
+      setNotification({ open: true, message: `Error deleting plant: ${err.message}`, severity: 'error' });
     }
   });
 
@@ -190,126 +243,231 @@ export const Plants: React.FC = () => {
     saveMutation.mutate();
   };
 
+  const handleExportExcel = () => {
+    const data = filteredPlants.map((p) => ({
+      'Plant Name': p.plantName,
+      'Location / Address': p.location,
+      'Status': p.status
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, 'Plants Master');
+    XLSX.writeFile(wb, 'Plants_Master.xlsx');
+    setNotification({ open: true, message: 'Plants master exported to Excel!', severity: 'success' });
+  };
+
   return (
     <Box sx={{ py: 1 }}>
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 1 }}>
             <BusinessIcon sx={{ color: '#10b981' }} />
-            Plants Administration & Locations
-          </Typography>
-          <Typography variant="body2" sx={{ color: '#64748b', mt: 0.3 }}>
-            Manage physical factory units, facilities, and regional manufacturing operations.
+            Plants Administration & Locations Master
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-          sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
-        >
-          Add New Plant
-        </Button>
+        <Stack direction="row" spacing={1.5}>
+          <Button
+            variant="outlined"
+            startIcon={<FileDownloadIcon />}
+            onClick={handleExportExcel}
+            sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
+          >
+            Export Excel
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenDialog()}
+            sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
+          >
+            Add New Plant
+          </Button>
+        </Stack>
       </Box>
 
-      <Card sx={{ borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-        <CardContent sx={{ p: 2.5 }}>
-          {/* Table Toolbar */}
-          <Box sx={{ pb: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
-            <TextField
-              placeholder="Search plants by name or location..."
-              size="small"
-              sx={{ width: { xs: '100%', sm: 320 } }}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon sx={{ color: '#94a3b8', fontSize: 20 }} />
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
+      {/* Main Card with Handsontable and Controls */}
+      <Card sx={{ borderRadius: '16px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+          <Box sx={{ pb: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+            <Box>
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <TableViewIcon sx={{ color: '#0284c7' }} />
+                  Plants Master Directory
+                </Typography>
+                <Chip
+                  icon={<CloudDoneIcon sx={{ fontSize: '15px !important', color: '#16a34a' }} />}
+                  label="In-place edit • Auto-saves instantly"
+                  size="small"
+                  sx={{ bgcolor: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', fontWeight: 600, fontSize: '0.75rem' }}
+                />
+              </Stack>
+            </Box>
+
+            <Stack direction="row" spacing={1.5} sx={{ width: { xs: '100%', sm: 'auto' }, alignItems: 'center' }}>
+              <FormControl size="small" sx={{ minWidth: 150 }}>
+                <InputLabel>Filter Status</InputLabel>
+                <Select
+                  value={statusFilter}
+                  label="Filter Status"
+                  onChange={(e) => setStatusFilter(e.target.value as any)}
+                  sx={{ borderRadius: '8px', fontSize: '0.85rem' }}
+                >
+                  <MenuItem value="ALL">All Statuses</MenuItem>
+                  <MenuItem value="ACTIVE">ACTIVE</MenuItem>
+                  <MenuItem value="INACTIVE">INACTIVE</MenuItem>
+                </Select>
+              </FormControl>
+
+              <TextField
+                placeholder="Search plants by name or location..."
+                size="small"
+                sx={{ width: { xs: '100%', sm: 260 } }}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ color: '#94a3b8', fontSize: 20 }} />
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+            </Stack>
           </Box>
 
-          <TableContainer sx={{ border: '1px solid #e2e8f0', borderRadius: '10px' }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Plant Name</TableCell>
-                  <TableCell>Location / Facility Address</TableCell>
-                  <TableCell align="center">Status</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredPlants.length > 0 ? (
-                  filteredPlants.map((plant) => (
-                    <TableRow key={plant.id} hover>
-                      <TableCell>
-                        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                          <Avatar sx={{ bgcolor: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', width: 32, height: 32 }}>
-                            <BusinessIcon sx={{ fontSize: 18 }} />
-                          </Avatar>
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#0f172a' }}>
-                            {plant.plantName}
-                          </Typography>
-                        </Stack>
-                      </TableCell>
-                      <TableCell sx={{ color: '#475569', fontWeight: 500 }}>
-                        {plant.location}
-                      </TableCell>
-                      <TableCell align="center">
-                        <Chip
-                          size="small"
-                          label={plant.status}
-                          sx={{
-                            fontWeight: 700,
-                            bgcolor: plant.status === 'ACTIVE' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                            color: plant.status === 'ACTIVE' ? '#059669' : '#dc2626',
-                            fontSize: '0.7rem'
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', alignItems: 'center' }}>
-                          <Tooltip title="Toggle Status">
-                            <IconButton onClick={() => toggleStatusMutation.mutate(plant)} size="small">
-                              {plant.status === 'ACTIVE' ? (
-                                <ToggleOnIcon sx={{ color: '#10b981', fontSize: 26 }} />
-                              ) : (
-                                <ToggleOffIcon sx={{ color: '#94a3b8', fontSize: 26 }} />
-                              )}
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Edit Details">
-                            <IconButton onClick={() => handleOpenDialog(plant)} size="small" sx={{ color: '#6366f1' }}>
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={4} align="center" sx={{ py: 6, color: '#64748b' }}>
-                      {isLoading ? (
-                        <CircularProgress size={30} color="primary" />
-                      ) : (
-                        'No plants registered.'
-                      )}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          {/* Handsontable Grid Container */}
+          <Box
+            sx={{
+              width: '100%',
+              borderRadius: '12px',
+              border: '1px solid #e2e8f0',
+              '& .handsontable': {
+                fontFamily: 'inherit',
+                fontSize: '0.85rem'
+              },
+              '& .htCore th': {
+                bgcolor: '#f8fafc',
+                color: '#0f172a',
+                fontWeight: 700,
+                py: 1.2
+              },
+              '& .htCore td': {
+                py: 1,
+                color: '#334155'
+              }
+            }}
+          >
+            {isLoading ? (
+              <Box sx={{ py: 6, textAlign: 'center' }}>
+                <CircularProgress size={32} />
+              </Box>
+            ) : hotData.length > 0 ? (
+              <HotTable
+                data={hotData}
+                colHeaders={['#', 'Plant Name', 'Location / Facility Address', 'Status', 'Action']}
+                columns={[
+                  { data: 'rowNum', readOnly: true, width: 50, className: 'htCenter htMiddle' },
+                  { data: 'name', type: 'text', width: 280, className: 'htMiddle' },
+                  { data: 'location', type: 'text', width: 320, className: 'htMiddle' },
+                  {
+                    data: 'status',
+                    type: 'dropdown',
+                    source: ['ACTIVE', 'INACTIVE'],
+                    width: 140,
+                    className: 'htCenter htMiddle'
+                  },
+                  {
+                    data: 'action',
+                    readOnly: true,
+                    width: 100,
+                    className: 'htCenter htMiddle',
+                    renderer: (_instance: any, td: HTMLTableCellElement) => {
+                      td.innerHTML = '<button type="button" style="background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; border-radius: 6px; padding: 4px 12px; font-weight: 700; font-size: 11px; cursor: pointer;">Delete</button>';
+                      td.className = 'htCenter htMiddle';
+                      return td;
+                    }
+                  }
+                ]}
+                afterChange={handleAfterChange}
+                afterOnCellMouseDown={(event: any, coords: any) => {
+                  if (coords.col === 4 && coords.row >= 0) {
+                    event.stopImmediatePropagation();
+                    const rowData = hotData[coords.row];
+                    const plantObj = plants.find((p) => p.id === rowData?.id);
+                    if (plantObj) {
+                      setDeleteModal({ open: true, plant: plantObj });
+                    }
+                  }
+                }}
+                rowHeaders={true}
+                height="auto"
+                width="100%"
+                colWidths={[50, 280, 320, 140, 100]}
+                stretchH="all"
+                autoWrapRow={true}
+                autoWrapCol={true}
+                columnSorting={true}
+                filters={true}
+                dropdownMenu={true}
+                contextMenu={['copy']}
+                licenseKey="non-commercial-and-evaluation"
+              />
+            ) : (
+              <Box sx={{ py: 6, textAlign: 'center', color: '#64748b' }}>
+                No plants registered. Click "Add New Plant" to register a factory facility.
+              </Box>
+            )}
+          </Box>
         </CardContent>
       </Card>
+
+      {/* CONFIRM DELETE MODAL POPUP (NOT BROWSER ALERT) */}
+      <Dialog
+        open={deleteModal.open}
+        onClose={() => !deletePlantMutation.isPending && setDeleteModal({ open: false, plant: null })}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{ paper: { sx: { borderRadius: '16px', p: 1 } } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: '#0f172a', pb: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box sx={{ width: 40, height: 40, borderRadius: '50%', bgcolor: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <DeleteForeverIcon sx={{ color: '#dc2626' }} />
+          </Box>
+          Confirm Plant Deletion
+        </DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Typography variant="body2" sx={{ color: '#475569', lineHeight: 1.6 }}>
+            Are you sure you want to delete plant <strong>"{deleteModal.plant?.plantName}"</strong>?
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block', mt: 1 }}>
+            This action cannot be undone and will permanently remove this factory plant facility.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5, pt: 1 }}>
+          <Button
+            onClick={() => setDeleteModal({ open: false, plant: null })}
+            variant="outlined"
+            disabled={deletePlantMutation.isPending}
+            sx={{ borderRadius: '8px', textTransform: 'none', color: '#64748b' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => deleteModal.plant && deletePlantMutation.mutate(deleteModal.plant)}
+            variant="contained"
+            color="error"
+            disabled={deletePlantMutation.isPending}
+            sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 700, px: 2.5 }}
+          >
+            {deletePlantMutation.isPending ? <CircularProgress size={18} color="inherit" /> : 'Yes, Delete Plant'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Entry / Edit Dialog */}
       <Dialog
@@ -392,3 +550,5 @@ export const Plants: React.FC = () => {
     </Box>
   );
 };
+
+export default Plants;

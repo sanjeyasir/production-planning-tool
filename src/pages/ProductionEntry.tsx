@@ -9,6 +9,8 @@ import {
   updateProductionRecord,
   deleteProductionRecord,
   logActivity,
+  toLocalDateString,
+  parseLocalDate,
   type ProductionRecord
 } from '../services/db';
 import {
@@ -92,7 +94,7 @@ export const ProductionEntry: React.FC = () => {
   const [formData, setFormData] = useState({
     plantId: '',
     categoryId: '',
-    date: new Date().toISOString().split('T')[0],
+    date: toLocalDateString(new Date()),
     budgetVolume: 0,
     plannedVolume: 0,
     actualVolume: 0,
@@ -148,7 +150,7 @@ export const ProductionEntry: React.FC = () => {
       setEditFormData({
         plantId: editRecord.plantId,
         categoryId: editRecord.categoryId,
-        date: new Date(editRecord.date).toISOString().split('T')[0],
+        date: toLocalDateString(editRecord.date),
         budgetVolume: editRecord.budgetVolume,
         plannedVolume: editRecord.plannedVolume,
         actualVolume: editRecord.actualVolume,
@@ -164,7 +166,7 @@ export const ProductionEntry: React.FC = () => {
       return { mtd: 0, balance: 0, achievement: 0 };
     }
 
-    const selectedDate = new Date(formData.date);
+    const selectedDate = parseLocalDate(formData.date);
     const startOfMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
 
     const historicalSum = records
@@ -213,7 +215,7 @@ export const ProductionEntry: React.FC = () => {
         tenantId,
         plantId: data.plantId,
         categoryId: data.categoryId,
-        date: new Date(data.date),
+        date: parseLocalDate(data.date),
         budgetVolume: Number(data.budgetVolume),
         plannedVolume: Number(data.plannedVolume),
         actualVolume: Number(data.actualVolume),
@@ -238,7 +240,7 @@ export const ProductionEntry: React.FC = () => {
       setFormData({
         plantId: '',
         categoryId: '',
-        date: new Date().toISOString().split('T')[0],
+        date: toLocalDateString(new Date()),
         budgetVolume: 0,
         plannedVolume: 0,
         actualVolume: 0,
@@ -259,7 +261,7 @@ export const ProductionEntry: React.FC = () => {
       await updateProductionRecord(editRecord.id, {
         plantId: data.plantId,
         categoryId: data.categoryId,
-        date: new Date(data.date),
+        date: parseLocalDate(data.date),
         budgetVolume: Number(data.budgetVolume),
         plannedVolume: Number(data.plannedVolume),
         actualVolume: Number(data.actualVolume),
@@ -347,10 +349,10 @@ export const ProductionEntry: React.FC = () => {
         plantObj?.plantName || 'N/A',
         catObj?.name || 'N/A',
         new Date(r.date).toLocaleDateString(),
-        r.budgetVolume.toLocaleString(),
-        r.plannedVolume.toLocaleString(),
-        r.actualVolume.toLocaleString(),
-        r.acceptedQuantity.toLocaleString(),
+        (r.budgetVolume ?? 0).toLocaleString(),
+        (r.plannedVolume ?? 0).toLocaleString(),
+        (r.actualVolume ?? 0).toLocaleString(),
+        (r.acceptedQuantity ?? 0).toLocaleString(),
         `${rejRate}%`,
       ];
     });
@@ -537,13 +539,13 @@ export const ProductionEntry: React.FC = () => {
                         <Grid size={6}>
                           <Typography variant="caption" sx={{ color: '#64748b', display: 'block' }}>MTD Volume:</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 800, color: '#0f172a' }}>
-                            {liveMtdStats.mtd.toLocaleString()}
+                            {(liveMtdStats.mtd ?? 0).toLocaleString()}
                           </Typography>
                         </Grid>
                         <Grid size={6}>
                           <Typography variant="caption" sx={{ color: '#64748b', display: 'block' }}>Remaining Balance:</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 800, color: '#d97706' }}>
-                            {liveMtdStats.balance.toLocaleString()}
+                            {(liveMtdStats.balance ?? 0).toLocaleString()}
                           </Typography>
                         </Grid>
                       </Grid>
@@ -660,15 +662,15 @@ export const ProductionEntry: React.FC = () => {
                             </TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>{catObj?.name || 'N/A'}</TableCell>
                             <TableCell align="right">
-                              <Typography variant="body2" sx={{ fontWeight: 600 }}>{r.budgetVolume.toLocaleString()}</Typography>
-                              <Typography variant="caption" sx={{ color: '#64748b' }}>Plan: {r.plannedVolume.toLocaleString()}</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>{(r.budgetVolume ?? 0).toLocaleString()}</Typography>
+                              <Typography variant="caption" sx={{ color: '#64748b' }}>Plan: {(r.plannedVolume ?? 0).toLocaleString()}</Typography>
                             </TableCell>
                             <TableCell align="right" sx={{ fontWeight: 800, color: '#10b981' }}>
-                              {r.actualVolume.toLocaleString()}
+                              {(r.actualVolume ?? 0).toLocaleString()}
                             </TableCell>
                             <TableCell align="right">
-                              <Typography variant="body2" sx={{ fontWeight: 600, color: '#059669' }}>{r.acceptedQuantity.toLocaleString()}</Typography>
-                              <Typography variant="caption" sx={{ color: '#dc2626' }}>Rej: {r.rejectedQuantity.toLocaleString()}</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: '#059669' }}>{(r.acceptedQuantity ?? 0).toLocaleString()}</Typography>
+                              <Typography variant="caption" sx={{ color: '#dc2626' }}>Rej: {(r.rejectedQuantity ?? 0).toLocaleString()}</Typography>
                             </TableCell>
                             <TableCell align="center">
                               <Chip

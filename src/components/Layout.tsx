@@ -35,7 +35,6 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import BarChartIcon from '@mui/icons-material/BarChart';
-import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
 import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturing';
 import PeopleIcon from '@mui/icons-material/People';
 import BusinessIcon from '@mui/icons-material/Business';
@@ -46,6 +45,11 @@ import HomeIcon from '@mui/icons-material/Home';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import LockResetIcon from '@mui/icons-material/LockReset';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
+import DateRangeIcon from '@mui/icons-material/DateRange';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import FlagIcon from '@mui/icons-material/Flag';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 
 const DRAWER_WIDTH = 260;
 const COLLAPSED_DRAWER_WIDTH = 70;
@@ -89,7 +93,7 @@ export const Layout: React.FC = () => {
 
   const menuItems = [
     {
-      title: 'Navigation',
+      title: 'Overview',
       subheader: true,
     },
     {
@@ -98,7 +102,46 @@ export const Layout: React.FC = () => {
       icon: <HomeIcon fontSize="small" />,
     },
     {
-      title: 'Analytics & Dashboards',
+      title: 'Planning & Operations',
+      subheader: true,
+    },
+    {
+      title: 'Production Orders',
+      path: '/production-orders',
+      icon: <AssignmentIcon fontSize="small" />,
+      module: 'production',
+      action: 'view',
+    },
+    {
+      title: 'Schedule Creation',
+      path: '/schedule-creation',
+      icon: <DateRangeIcon fontSize="small" />,
+      module: 'production',
+      action: 'create',
+    },
+    {
+      title: 'Daily Schedule',
+      path: '/production-schedule',
+      icon: <CalendarMonthIcon fontSize="small" />,
+      module: 'production',
+      action: 'view',
+    },
+    {
+      title: 'Daily Output Entry',
+      path: '/daily-output-entry',
+      icon: <TrendingUpIcon fontSize="small" />,
+      module: 'production',
+      action: 'create',
+    },
+    {
+      title: 'Downtime',
+      path: '/downtime',
+      icon: <ReportProblemIcon fontSize="small" />,
+      module: 'downtime',
+      action: 'create',
+    },
+    {
+      title: 'Analytics & Reports',
       subheader: true,
     },
     {
@@ -116,47 +159,14 @@ export const Layout: React.FC = () => {
       action: 'view',
     },
     {
-      title: 'Planning & Operations',
-      subheader: true,
-    },
-    {
-      title: 'Production Planning',
-      path: '/production-planning',
-      icon: <CalendarMonthIcon fontSize="small" />,
-      module: 'production',
-      action: 'view',
-    },
-    {
-      title: 'Enter Production',
-      path: '/production-entry',
-      icon: <PrecisionManufacturingIcon fontSize="small" />,
-      module: 'production',
-      action: 'create',
-    },
-    {
-      title: 'Enter Downtime',
-      path: '/downtime-entry',
-      icon: <PlaylistAddIcon fontSize="small" />,
-      module: 'downtime',
-      action: 'create',
-    },
-    {
-      title: 'Administration',
+      title: 'Masters & Setup',
       subheader: true,
       adminOnly: true,
     },
     {
-      title: 'Users Management',
-      path: '/users',
-      icon: <PeopleIcon fontSize="small" />,
-      module: 'user',
-      action: 'view',
-      adminOnly: true,
-    },
-    {
-      title: 'Plants Master',
-      path: '/plants',
-      icon: <BusinessIcon fontSize="small" />,
+      title: 'Factory Calendar',
+      path: '/factory-calendar',
+      icon: <FlagIcon fontSize="small" />,
       module: 'master',
       action: 'view',
       adminOnly: true,
@@ -170,10 +180,26 @@ export const Layout: React.FC = () => {
       adminOnly: true,
     },
     {
+      title: 'Plants Master',
+      path: '/plants',
+      icon: <BusinessIcon fontSize="small" />,
+      module: 'master',
+      action: 'view',
+      adminOnly: true,
+    },
+    {
       title: 'Categories Master',
       path: '/categories',
       icon: <CategoryIcon fontSize="small" />,
       module: 'master',
+      action: 'view',
+      adminOnly: true,
+    },
+    {
+      title: 'Users Management',
+      path: '/users',
+      icon: <PeopleIcon fontSize="small" />,
+      module: 'user',
       action: 'view',
       adminOnly: true,
     },
@@ -198,10 +224,10 @@ export const Layout: React.FC = () => {
 
   // Mobile Bottom Navigation items
   const mobileShortcuts = [
-    { label: 'Overview', icon: <HomeIcon />, path: '/' },
-    { label: 'Production', icon: <BarChartIcon />, path: '/production-dashboard' },
-    { label: 'Planning', icon: <CalendarMonthIcon />, path: '/production-planning' },
-    { label: 'Downtime', icon: <DashboardIcon />, path: '/downtime-dashboard' },
+    { label: 'Orders', icon: <AssignmentIcon />, path: '/production-orders' },
+    { label: 'Schedule', icon: <CalendarMonthIcon />, path: '/production-schedule' },
+    { label: 'Output', icon: <TrendingUpIcon />, path: '/daily-output-entry' },
+    { label: 'Downtime', icon: <ReportProblemIcon />, path: '/downtime-entry' },
     { label: 'Menu', icon: <MoreHorizIcon />, path: 'MENU_TRIGGER' },
   ];
 

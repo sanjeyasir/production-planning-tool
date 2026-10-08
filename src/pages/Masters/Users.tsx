@@ -317,9 +317,6 @@ export const Users: React.FC = () => {
             <PeopleIcon sx={{ color: '#6366f1' }} />
             User & Member Management
           </Typography>
-          <Typography variant="body2" sx={{ color: '#64748b', mt: 0.3 }}>
-            Configure security roles, monitor account status, and approve pending password reset requests.
-          </Typography>
         </Box>
         {isSuperAdmin && (
           <Button

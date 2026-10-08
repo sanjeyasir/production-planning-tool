@@ -24,9 +24,14 @@ import { ChangePassword } from './pages/ChangePassword';
 import { Landing } from './pages/Landing';
 import { DowntimeDashboard } from './pages/DowntimeDashboard';
 import { ProductionDashboard } from './pages/ProductionDashboard';
-import { DowntimeEntry } from './pages/DowntimeEntry';
-import { ProductionEntry } from './pages/ProductionEntry';
-import { ProductionPlanning } from './pages/ProductionPlanning';
+import { MachineDowntime } from './pages/MachineDowntime';
+
+// Planning Dedicated Pages
+import { ProductionOrders } from './pages/Planning/ProductionOrders';
+import { ScheduleCreation } from './pages/Planning/ScheduleCreation';
+import { ProductionSchedule } from './pages/Planning/ProductionSchedule';
+import { DailyOutputEntry } from './pages/Planning/DailyOutputEntry';
+import { FactoryCalendar } from './pages/Planning/FactoryCalendar';
 
 // Masters Pages
 import { Plants } from './pages/Masters/Plants';
@@ -170,13 +175,55 @@ function App() {
                 }
               />
               <Route
-                path="downtime-dashboard"
+                path="production-orders"
                 element={
-                  <GuardedRoute module="downtime" action="view">
-                    <DowntimeDashboard />
+                  <GuardedRoute module="production" action="view">
+                    <ProductionOrders />
                   </GuardedRoute>
                 }
               />
+              <Route
+                path="schedule-creation"
+                element={
+                  <GuardedRoute module="production" action="create">
+                    <ScheduleCreation />
+                  </GuardedRoute>
+                }
+              />
+              <Route
+                path="production-schedule"
+                element={
+                  <GuardedRoute module="production" action="view">
+                    <ProductionSchedule />
+                  </GuardedRoute>
+                }
+              />
+              <Route
+                path="draft-plans"
+                element={<Navigate to="/schedule-creation" replace />}
+              />
+              <Route
+                path="daily-output-entry"
+                element={
+                  <GuardedRoute module="production" action="create">
+                    <DailyOutputEntry />
+                  </GuardedRoute>
+                }
+              />
+              <Route
+                path="factory-calendar"
+                element={
+                  <GuardedRoute module="master" action="view">
+                    <FactoryCalendar />
+                  </GuardedRoute>
+                }
+              />
+              <Route
+                path="planning-analytics"
+                element={<Navigate to="/production-dashboard" replace />}
+              />
+
+              {/* Analytics & Downtime */}
               <Route
                 path="production-dashboard"
                 element={
@@ -186,28 +233,42 @@ function App() {
                 }
               />
               <Route
-                path="downtime-entry"
+                path="downtime-dashboard"
                 element={
-                  <GuardedRoute module="downtime" action="create">
-                    <DowntimeEntry />
+                  <GuardedRoute module="downtime" action="view">
+                    <DowntimeDashboard />
                   </GuardedRoute>
                 }
+              />
+              <Route
+                path="downtime"
+                element={
+                  <GuardedRoute module="downtime" action="create">
+                    <MachineDowntime />
+                  </GuardedRoute>
+                }
+              />
+              <Route
+                path="machine-downtime"
+                element={
+                  <GuardedRoute module="downtime" action="create">
+                    <MachineDowntime />
+                  </GuardedRoute>
+                }
+              />
+              <Route
+                path="downtime-entry"
+                element={<Navigate to="/downtime" replace />}
               />
               <Route
                 path="production-entry"
-                element={
-                  <GuardedRoute module="production" action="create">
-                    <ProductionEntry />
-                  </GuardedRoute>
-                }
+                element={<Navigate to="/daily-output-entry" replace />}
               />
+
+              {/* Production planning redirect alias */}
               <Route
                 path="production-planning"
-                element={
-                  <GuardedRoute module="production" action="view">
-                    <ProductionPlanning />
-                  </GuardedRoute>
-                }
+                element={<Navigate to="/production-schedule" replace />}
               />
 
               {/* Master Data Administration */}

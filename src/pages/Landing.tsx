@@ -13,13 +13,17 @@ import {
   Stack,
   Chip,
 } from '@mui/material';
+// Icons
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import BarChartIcon from '@mui/icons-material/BarChart';
-import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturing';
-import SettingsIcon from '@mui/icons-material/Settings';
 import FactoryIcon from '@mui/icons-material/Factory';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import DateRangeIcon from '@mui/icons-material/DateRange';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import FlagIcon from '@mui/icons-material/Flag';
+import ReportProblemIcon from '@mui/icons-material/ReportProblem';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 
 export const Landing: React.FC = () => {
   const navigate = useNavigate();
@@ -31,64 +35,84 @@ export const Landing: React.FC = () => {
 
   const cards = [
     {
-      title: 'Production Analytics',
-      description: 'Track hourly and daily production yield vs planned budgets, scrap rates, and line efficiency.',
-      icon: <BarChartIcon sx={{ fontSize: 32, color: '#10b981' }} />,
+      title: 'Production Orders Queue',
+      description: 'Manage incoming batches, order priorities, and run automated schedule generation.',
+      icon: <AssignmentIcon sx={{ fontSize: 32, color: '#6366f1' }} />,
+      bg: 'rgba(99, 102, 241, 0.08)',
+      path: '/production-orders',
+      module: 'production',
+      action: 'view',
+      actionText: 'View Orders Queue'
+    },
+    {
+      title: 'Schedule Creation & Capacity',
+      description: 'Multi-machine schedule planner, date range auto-fill, and capacity clash detector.',
+      icon: <DateRangeIcon sx={{ fontSize: 32, color: '#4f46e5' }} />,
+      bg: 'rgba(79, 70, 229, 0.08)',
+      path: '/schedule-creation',
+      module: 'production',
+      action: 'create',
+      actionText: 'Create Schedule'
+    },
+    {
+      title: 'Daily Schedule Matrix',
+      description: 'Interactive Gantt board for multi-line daily production schedules, holidays, and live tracking.',
+      icon: <CalendarMonthIcon sx={{ fontSize: 32, color: '#10b981' }} />,
       bg: 'rgba(16, 185, 129, 0.08)',
+      path: '/production-schedule',
+      module: 'production',
+      action: 'view',
+      actionText: 'Open Daily Schedule'
+    },
+    {
+      title: 'Daily Output Entry',
+      description: 'Log daily completed volume, scrap parts, and operator shift notes for active jobs.',
+      icon: <TrendingUpIcon sx={{ fontSize: 32, color: '#06b6d4' }} />,
+      bg: 'rgba(6, 182, 212, 0.08)',
+      path: '/daily-output-entry',
+      module: 'production',
+      action: 'create',
+      actionText: 'Record Daily Output'
+    },
+    {
+      title: 'Enter Downtime Incident',
+      description: 'Record machine stoppages, breakdown durations, and categorization in real time.',
+      icon: <ReportProblemIcon sx={{ fontSize: 32, color: '#ef4444' }} />,
+      bg: 'rgba(239, 68, 68, 0.08)',
+      path: '/downtime-entry',
+      module: 'downtime',
+      action: 'create',
+      actionText: 'Log Downtime Event'
+    },
+    {
+      title: 'Production Analytics',
+      description: 'Monitor actual output yield vs planned budgets, scrap rates, and line efficiency.',
+      icon: <BarChartIcon sx={{ fontSize: 32, color: '#3b82f6' }} />,
+      bg: 'rgba(59, 130, 246, 0.08)',
       path: '/production-dashboard',
       module: 'production',
       action: 'view',
       actionText: 'View Production Dashboard'
     },
     {
-      title: 'Production Planning & Gantt',
-      description: 'Interactive what-if scheduling sandbox, hourly runtime sequencing, holiday and downtime factoring.',
-      icon: <CalendarMonthIcon sx={{ fontSize: 32, color: '#6366f1' }} />,
-      bg: 'rgba(99, 102, 241, 0.08)',
-      path: '/production-planning',
-      module: 'production',
-      action: 'view',
-      actionText: 'Open Planning Sandbox'
-    },
-    {
       title: 'Downtime Analytics',
-      description: 'Analyze root causes of machine stoppages, breakdown durations, and line availability metrics.',
-      icon: <DashboardIcon sx={{ fontSize: 32, color: '#f59e0b' }} />,
-      bg: 'rgba(245, 158, 11, 0.08)',
+      description: 'Analyze machine stoppage root causes, breakdown trends, and line availability.',
+      icon: <DashboardIcon sx={{ fontSize: 32, color: '#f97316' }} />,
+      bg: 'rgba(249, 115, 22, 0.08)',
       path: '/downtime-dashboard',
       module: 'downtime',
       action: 'view',
       actionText: 'View Downtime Dashboard'
     },
     {
-      title: 'Enter Production Output',
-      description: 'Log actual manufacturing output volumes, rejected scrap parts, and operator shift metrics directly.',
-      icon: <PrecisionManufacturingIcon sx={{ fontSize: 32, color: '#06b6d4' }} />,
-      bg: 'rgba(6, 182, 212, 0.08)',
-      path: '/production-entry',
-      module: 'production',
-      action: 'create',
-      actionText: 'Log Production'
-    },
-    {
-      title: 'Enter Machine Downtime',
-      description: 'Record new machine breakdown events, stoppage categories, and shift incidents in real time.',
-      icon: <PrecisionManufacturingIcon sx={{ fontSize: 32, color: '#ef4444' }} />,
-      bg: 'rgba(239, 68, 68, 0.08)',
-      path: '/downtime-entry',
-      module: 'downtime',
-      action: 'create',
-      actionText: 'Log Downtime'
-    },
-    {
-      title: 'System Masters & Users',
-      description: 'Configure plants, production lines, machines, product categories, and manage user role permissions.',
-      icon: <SettingsIcon sx={{ fontSize: 32, color: '#8b5cf6' }} />,
-      bg: 'rgba(139, 92, 246, 0.08)',
-      path: '/users',
-      module: 'user',
+      title: 'Factory Calendar',
+      description: 'Manage national holidays and scheduled factory shutdown days for planning.',
+      icon: <FlagIcon sx={{ fontSize: 32, color: '#ec4899' }} />,
+      bg: 'rgba(236, 72, 153, 0.08)',
+      path: '/factory-calendar',
+      module: 'master',
       action: 'view',
-      actionText: 'Manage Masters'
+      actionText: 'Manage Calendar'
     }
   ];
 
