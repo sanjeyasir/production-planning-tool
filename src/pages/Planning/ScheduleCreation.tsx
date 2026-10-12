@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/authStore';
 import {
   getMachines,
+  getMachineDailyCapacities,
   getProductionOrders,
   getHolidays,
   getProductionPlans,
@@ -152,6 +153,30 @@ export const ScheduleCreation: React.FC = () => {
     queryFn: () => getDowntimeRecords(tenantId),
     enabled: !!tenantId,
   });
+
+  const { data: dailyCapacities = [] } = useQuery({
+    queryKey: ['machineDailyCapacities', tenantId],
+    queryFn: () => getMachineDailyCapacities(tenantId),
+    enabled: !!tenantId,
+  });
+
+  const dailyCapacityMap = useMemo(() => {
+    const map: Record<string, { dailyCapacity: number; operatingHours: number }> = {};
+    dailyCapacities.forEach(dc => {
+      map[`${dc.machineId}_${dc.dateStr}`] = {
+        dailyCapacity: dc.dailyCapacity,
+        operatingHours: dc.operatingHours
+      };
+    });
+    return map;
+  }, [dailyCapacities]);
+
+  const getMachineCapacityOnDate = (m: Machine, dStr: string) => {
+    const dayOverride = dailyCapacityMap[`${m.id}_${dStr}`];
+    const opHours = dayOverride ? dayOverride.operatingHours : (Number(m.operatingHours) === 12 ? 12 : 24);
+    const dailyCap = dayOverride ? dayOverride.dailyCapacity : (Number(m.dailyCapacity) || 1000);
+    return { opHours, dailyCap };
+  };
 
   // ----------------------------------------------------
   // STATE
@@ -557,8 +582,7 @@ export const ScheduleCreation: React.FC = () => {
       timelineDates.forEach(({ dateStr }) => {
         const holiday = holidayMap[dateStr];
         const downtimeMins = Number(downtimeMap[`${machine.id}_${dateStr}`]) || 0;
-        const opHours = Number(machine.operatingHours) || 24;
-        const dailyCap = Number(machine.dailyCapacity) || 1000;
+        const { opHours, dailyCap } = getMachineCapacityOnDate(machine, dateStr);
         
         let effectiveCapacity = dailyCap;
         if (holiday) {
@@ -743,8 +767,7 @@ export const ScheduleCreation: React.FC = () => {
         dates.forEach(d => {
           const key = `${m.id}_${d.dateStr}`;
           const downtimeMins = Number(downtimeMap[`${m.id}_${d.dateStr}`]) || 0;
-          const opHours = Number(m.operatingHours) || 24;
-          const dailyCap = Number(m.dailyCapacity) || 1000;
+          const { opHours, dailyCap } = getMachineCapacityOnDate(m, d.dateStr);
           let effectiveCap = dailyCap;
           if (downtimeMins > 0) {
             const lost = downtimeMins / 60;
@@ -771,8 +794,7 @@ export const ScheduleCreation: React.FC = () => {
 
         const key = `${m.id}_${d.dateStr}`;
         const downtimeMins = Number(downtimeMap[`${m.id}_${d.dateStr}`]) || 0;
-        const opHours = Number(m.operatingHours) || 24;
-        const dailyCap = Number(m.dailyCapacity) || 1000;
+        const { opHours, dailyCap } = getMachineCapacityOnDate(m, d.dateStr);
         let effectiveCap = dailyCap;
         if (downtimeMins > 0) {
           const lost = downtimeMins / 60;
@@ -863,8 +885,7 @@ export const ScheduleCreation: React.FC = () => {
     }
 
     const downtimeMins = Number(downtimeMap[`${machine.id}_${dateStr}`]) || 0;
-    const opHours = Number(machine.operatingHours) || 24;
-    const dailyCap = Number(machine.dailyCapacity) || 1000;
+    const { opHours, dailyCap } = getMachineCapacityOnDate(machine, dateStr);
 
     let effectiveCap = dailyCap;
     if (downtimeMins > 0) {
@@ -2201,8 +2222,7 @@ export const ScheduleCreation: React.FC = () => {
                     return targetMachines.map(m => {
                       const key = `${m.id}_${d.dateStr}`;
                       const downtimeMins = Number(downtimeMap[key]) || 0;
-                      const opHours = Number(m.operatingHours) || 24;
-                      const dailyCap = Number(m.dailyCapacity) || 1000;
+                      const { opHours, dailyCap } = getMachineCapacityOnDate(m, d.dateStr);
                       let effectiveCap = dailyCap;
                       if (downtimeMins > 0) {
                         const lost = downtimeMins / 60;

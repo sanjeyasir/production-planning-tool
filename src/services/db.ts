@@ -4,8 +4,10 @@ import {
   doc, 
   getDocs, 
   addDoc, 
+  setDoc,
   updateDoc, 
   deleteDoc, 
+  writeBatch,
   query, 
   where, 
   orderBy, 
@@ -61,7 +63,13 @@ export const parseLocalDate = (dateStr: string): Date => {
 // Generic list query for a tenant
 const listTenantCollection = async <T>(collectionName: string, tenantId: string): Promise<T[]> => {
   const colRef = collection(db, collectionName);
-  const q = query(colRef, where('tenantId', '==', tenantId));
+  let q;
+  if (tenantId === 'rileys') {
+    // Include both modern 'rileys' and legacy 'admin_tenant_gmail' records
+    q = query(colRef, where('tenantId', 'in', ['rileys', 'admin_tenant_gmail']));
+  } else {
+    q = query(colRef, where('tenantId', '==', tenantId));
+  }
   const snapshot = await getDocs(q);
   return snapshot.docs.map(doc => formatDoc<T>(doc));
 };
@@ -181,6 +189,82 @@ export const deleteMachine = async (id: string) => {
 };
 
 // ----------------------------------------------------
+// TOYO MACHINE DAILY CAPACITIES (Day-to-Day Variable Capacity)
+// ----------------------------------------------------
+export interface MachineDailyCapacity {
+  id: string; // doc id: `${machineId}_${dateStr}`
+  tenantId: string; // 'toyo'
+  machineId: string;
+  machineCode?: string;
+  dateStr: string; // 'YYYY-MM-DD'
+  operatingHours: number; // e.g. 8, 12, 16, 24
+  dailyCapacity: number; // Scheduled dynamic capacity units for this date
+  baseDailyCapacity?: number; // Nominal capacity
+  variance?: number; // Variance vs base
+  plannedEfficiency?: number; // percentage (e.g. 85%)
+  reason?: string; // Reason if capacity differs (e.g. Mold change, preventive maintenance, single shift)
+  notes?: string;
+  updatedAt?: Date;
+}
+
+export const getMachineDailyCapacities = async (
+  tenantId: string,
+  startDate?: string,
+  endDate?: string
+): Promise<MachineDailyCapacity[]> => {
+  const colRef = collection(db, 'machine_daily_capacities');
+  let q;
+  if (startDate && endDate) {
+    q = query(
+      colRef,
+      where('tenantId', '==', tenantId),
+      where('dateStr', '>=', startDate),
+      where('dateStr', '<=', endDate)
+    );
+  } else {
+    q = query(colRef, where('tenantId', '==', tenantId));
+  }
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => formatDoc<MachineDailyCapacity>(doc));
+};
+
+export const setMachineDailyCapacity = async (
+  data: Omit<MachineDailyCapacity, 'id' | 'updatedAt'>
+) => {
+  const docId = `${data.machineId}_${data.dateStr}`;
+  const docRef = doc(db, 'machine_daily_capacities', docId);
+  const payload = {
+    ...data,
+    updatedAt: new Date()
+  };
+  await setDoc(docRef, payload, { merge: true });
+  return docId;
+};
+
+export const batchSetMachineDailyCapacities = async (
+  records: Omit<MachineDailyCapacity, 'id' | 'updatedAt'>[]
+) => {
+  if (records.length === 0) return;
+  const batch = writeBatch(db);
+  for (const record of records) {
+    const docId = `${record.machineId}_${record.dateStr}`;
+    const docRef = doc(db, 'machine_daily_capacities', docId);
+    batch.set(docRef, {
+      ...record,
+      updatedAt: new Date()
+    }, { merge: true });
+  }
+  await batch.commit();
+};
+
+export const deleteMachineDailyCapacity = async (machineId: string, dateStr: string) => {
+  const docId = `${machineId}_${dateStr}`;
+  const docRef = doc(db, 'machine_daily_capacities', docId);
+  await deleteDoc(docRef);
+};
+
+
+// ----------------------------------------------------
 // PRODUCTION CATEGORIES
 // ----------------------------------------------------
 export interface ProductionCategory {
@@ -257,21 +341,38 @@ export interface UserDoc {
   name: string;
   email: string;
   roleId: string;
+  company?: string; // 'rileys' | 'toyo' | 'all'
+  permissions?: string[];
   status: string;
   createdAt: Date;
 }
 
 export const getUsers = (tenantId: string) => listTenantCollection<UserDoc>('users', tenantId);
 
+export const getAllUsers = async (): Promise<UserDoc[]> => {
+  const colRef = collection(db, 'users');
+  const snapshot = await getDocs(colRef);
+  return snapshot.docs.map(doc => formatDoc<UserDoc>(doc));
+};
+
 export const updateUserRole = async (userId: string, roleId: string) => {
   const docRef = doc(db, 'users', userId);
   await updateDoc(docRef, { roleId });
+};
+
+export const updateUserCompany = async (userId: string, company: string) => {
+  const docRef = doc(db, 'users', userId);
+  await updateDoc(docRef, { 
+    company,
+    tenantId: company === 'all' ? 'rileys' : company 
+  });
 };
 
 export const updateUserStatus = async (userId: string, status: string) => {
   const docRef = doc(db, 'users', userId);
   await updateDoc(docRef, { status });
 };
+
 
 // ----------------------------------------------------
 // DOWNTIME RECORDS

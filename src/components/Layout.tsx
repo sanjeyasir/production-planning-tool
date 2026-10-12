@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
-import { RileysLogo } from './RileysLogo';
+import { CompanyBrandLogo } from './CompanyBrandLogo';
 import {
   Box,
   Drawer,
@@ -29,6 +29,8 @@ import {
   Paper,
   Button,
   Stack,
+  FormControl,
+  Select,
 } from '@mui/material';
 
 // Icons
@@ -52,6 +54,7 @@ import FlagIcon from '@mui/icons-material/Flag';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
+import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturing';
 
 const DRAWER_WIDTH = 264;
 const COLLAPSED_DRAWER_WIDTH = 72;
@@ -63,7 +66,20 @@ export const Layout: React.FC = () => {
   
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
   
-  const { profile, tenant, role, hasPermission, clearAuth } = useAuthStore();
+  const { 
+    profile, 
+    tenant, 
+    role, 
+    hasPermission, 
+    clearAuth,
+    activeCompany,
+    setActiveCompany,
+    getAvailableCompanies,
+    canAccessCompany,
+    isAdmin
+  } = useAuthStore();
+  
+  const availableCompanies = getAvailableCompanies();
   
   const [open, setOpen] = useState(true); // Desktop sidebar open state
   const [mobileOpen, setMobileOpen] = useState(false); // Mobile drawer open state
@@ -179,12 +195,22 @@ export const Layout: React.FC = () => {
       adminOnly: true,
     },
     {
-      title: 'Machines Master',
+      title: "Riley's Machine Master",
       path: '/machines',
       icon: <FactoryIcon fontSize="small" />,
       module: 'master',
       action: 'view',
       adminOnly: true,
+      company: 'rileys',
+    },
+    {
+      title: 'Toyo Machine Master',
+      path: '/machines-toyo',
+      icon: <PrecisionManufacturingIcon fontSize="small" />,
+      module: 'master',
+      action: 'view',
+      adminOnly: true,
+      company: 'toyo',
     },
     {
       title: 'Plants Master',
@@ -212,15 +238,21 @@ export const Layout: React.FC = () => {
     },
   ];
 
-  // Filter items based on user permissions
+  // Filter items based on user permissions and company scoping
   const filteredMenuItems = menuItems.filter((item) => {
+    if ((item as any).company) {
+      const comp = (item as any).company;
+      if (comp === 'toyo' && !canAccessCompany('toyo')) return false;
+      if (comp === 'rileys' && !canAccessCompany('rileys')) return false;
+      if (!isAdmin() && activeCompany !== comp) return false;
+    }
     if (item.subheader) {
-      if (item.adminOnly && profile?.email !== 'admin@gmail.com' && role?.name !== 'Super Admin' && role?.name !== 'Tenant Admin') {
+      if (item.adminOnly && !isAdmin() && role?.name !== 'Tenant Admin') {
         return false;
       }
       return true;
     }
-    if (item.adminOnly && profile?.email !== 'admin@gmail.com' && role?.name !== 'Super Admin' && role?.name !== 'Tenant Admin') {
+    if (item.adminOnly && !isAdmin() && role?.name !== 'Tenant Admin') {
       return false;
     }
     if (item.module && item.action) {
@@ -261,11 +293,11 @@ export const Layout: React.FC = () => {
       >
         {open ? (
           <Box sx={{ display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
-            <RileysLogo size="sm" variant="full" themeMode="sidebar" />
+            <CompanyBrandLogo company={activeCompany} size="sm" variant="full" themeMode="sidebar" />
           </Box>
         ) : (
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <RileysLogo size="sm" variant="icon" themeMode="sidebar" />
+            <CompanyBrandLogo company={activeCompany} size="sm" variant="icon" themeMode="sidebar" />
           </Box>
         )}
 
@@ -494,10 +526,10 @@ export const Layout: React.FC = () => {
               </IconButton>
             )}
 
-            {/* App Title Header without Riley's */}
+            {/* App Title Header */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               {(!open || !isDesktop) && (
-                <RileysLogo size="sm" variant="icon" themeMode="sidebar" />
+                <CompanyBrandLogo company={activeCompany} size="sm" variant="icon" themeMode="sidebar" />
               )}
               <Typography
                 variant="subtitle1"
@@ -549,23 +581,48 @@ export const Layout: React.FC = () => {
               }}
             />
 
-            {/* Plant Chip */}
-            {tenant && (
-              <Chip
-                icon={<FactoryIcon sx={{ fontSize: '15px !important', color: '#6366f1 !important' }} />}
-                label={tenant.companyName || "Riley's Main Plant"}
-                size="small"
-                variant="outlined"
+            {/* Company Selection Dropdown: Admin views all, Role-based views respective */}
+            <FormControl size="small" sx={{ minWidth: { xs: 110, sm: 160 } }}>
+              <Select
+                value={activeCompany}
+                onChange={(e) => setActiveCompany(e.target.value as any)}
+                disabled={availableCompanies.length <= 1}
                 sx={{
-                  color: '#4338ca',
-                  borderColor: 'rgba(99, 102, 241, 0.3)',
-                  bgcolor: 'rgba(99, 102, 241, 0.05)',
-                  fontWeight: 700,
-                  fontSize: '0.75rem',
-                  display: { xs: 'none', sm: 'inline-flex' }
+                  height: 34,
+                  borderRadius: '9px',
+                  bgcolor: '#ffffff',
+                  fontWeight: 800,
+                  fontSize: '0.775rem',
+                  border: '1px solid #cbd5e1',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                  '& .MuiSelect-select': {
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    py: 0.5,
+                    px: 1.2,
+                  }
                 }}
-              />
-            )}
+              >
+                {availableCompanies.map((comp) => (
+                  <MenuItem key={comp.id} value={comp.id} sx={{ fontWeight: 700, fontSize: '0.8rem' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box
+                        sx={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          bgcolor: comp.id === 'toyo' ? '#0284c7' : '#ef4444'
+                        }}
+                      />
+                      <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '0.8rem', color: '#1e293b' }}>
+                        {comp.name}
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
             {/* Role Chip */}
             {role?.name && (

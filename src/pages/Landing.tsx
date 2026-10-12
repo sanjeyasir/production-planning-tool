@@ -20,7 +20,7 @@ import {
   Stack,
   Chip,
 } from '@mui/material';
-import { RileysLogo } from '../components/RileysLogo';
+import { CompanyBrandLogo } from '../components/CompanyBrandLogo';
 
 // Icons
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -34,10 +34,11 @@ import FlagIcon from '@mui/icons-material/Flag';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
+import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturing';
 
 export const Landing: React.FC = () => {
   const navigate = useNavigate();
-  const { profile, tenant, role, hasPermission } = useAuthStore();
+  const { profile, tenant, role, hasPermission, activeCompany } = useAuthStore();
   const tenantId = tenant?.id || '';
 
   const welcomeName = profile?.name || 'Operator';
@@ -159,6 +160,18 @@ export const Landing: React.FC = () => {
       module: 'master',
       action: 'view',
       actionText: 'Manage Calendar'
+    },
+    {
+      title: activeCompany === 'toyo' ? 'Toyo Machine Master' : "Riley's Machine Master",
+      description: activeCompany === 'toyo' 
+        ? 'Date-specific variable capacity schedules, shift allocations, and 12h / 24h operating configurations.'
+        : 'Factory machine registry with 12h / 24h operating schedules and nominal daily capacities.',
+      icon: <PrecisionManufacturingIcon sx={{ fontSize: 32, color: activeCompany === 'toyo' ? '#0284c7' : '#dc2626' }} />,
+      bg: activeCompany === 'toyo' ? 'rgba(2, 132, 199, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+      path: activeCompany === 'toyo' ? '/machines-toyo' : '/machines',
+      module: 'master',
+      action: 'view',
+      actionText: activeCompany === 'toyo' ? 'Open Toyo Machine Master' : "Open Riley's Machine Master"
     }
   ];
 
@@ -182,7 +195,7 @@ export const Landing: React.FC = () => {
       >
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ alignItems: { xs: 'flex-start', md: 'center' }, justifyContent: 'space-between' }}>
           <Stack direction="row" spacing={2.2} sx={{ alignItems: 'center' }}>
-            <RileysLogo size="lg" variant="icon" themeMode="sidebar" />
+            <CompanyBrandLogo company={activeCompany} size="lg" variant="icon" themeMode="sidebar" />
 
             <Box>
               <Typography variant="h4" sx={{ fontWeight: 900, color: '#0f172a', letterSpacing: '-0.03em', fontSize: { xs: '1.4rem', sm: '1.75rem' }, fontFamily: '"Outfit", sans-serif' }}>

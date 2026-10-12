@@ -8,7 +8,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
-import { seedGlobalRoles } from './seed';
+import { seedAllCompaniesAndRoles } from './seed';
 
 // State
 import { useAuthStore } from './store/authStore';
@@ -36,6 +36,7 @@ import { FactoryCalendar } from './pages/Planning/FactoryCalendar';
 // Masters Pages
 import { Plants } from './pages/Masters/Plants';
 import { Machines } from './pages/Masters/Machines';
+import { MachineMasterToyo } from './pages/Masters/MachineMasterToyo';
 import { Categories } from './pages/Masters/Categories';
 import { Users } from './pages/Masters/Users';
 
@@ -62,16 +63,22 @@ function App() {
 
           if (userDocSnap.exists()) {
             const profile = { id: userDocSnap.id, ...userDocSnap.data() } as any;
+            
+            // Ensure superadmin has company: 'all'
+            if (profile.email === 'admin@gmail.com') {
+              profile.company = 'all';
+              profile.roleId = 'super_admin';
+            }
 
             // Fetch Tenant
-            const tenantDocRef = doc(db, 'tenants', profile.tenantId);
+            const tenantDocRef = doc(db, 'tenants', profile.tenantId || 'rileys');
             const tenantDocSnap = await getDoc(tenantDocRef);
             const tenant = tenantDocSnap.exists()
               ? { id: tenantDocSnap.id, ...tenantDocSnap.data() } as any
               : null;
 
             // Fetch Role
-            const roleDocRef = doc(db, 'roles', profile.roleId);
+            const roleDocRef = doc(db, 'roles', profile.roleId || 'super_admin');
             const roleDocSnap = await getDoc(roleDocRef);
             const role = roleDocSnap.exists()
               ? { id: roleDocSnap.id, ...roleDocSnap.data() } as any
@@ -81,42 +88,36 @@ function App() {
           } else {
             // Profile doc doesn't exist yet, check if it's the default admin account
             if (user.email === 'admin@gmail.com') {
-              const tenantId = 'admin_tenant_gmail';
+              const tenantId = 'rileys';
 
-              // Seed global roles if missing
-              await seedGlobalRoles();
+              // Seed global roles and multi-company data
+              await seedAllCompaniesAndRoles();
 
-              // Create Tenant Profile
-              await setDoc(doc(db, 'tenants', tenantId), {
-                companyName: "Riley's Plant Operations",
-                subscriptionPlan: 'ENTERPRISE',
-                status: 'ACTIVE',
-                createdAt: new Date(),
-              });
-
-              // Create User Profile
+              // Create User Profile with company: 'all'
               await setDoc(doc(db, 'users', user.uid), {
                 tenantId,
-                name: 'Riley Administrator',
+                company: 'all',
+                name: 'System Administrator',
                 email: 'admin@gmail.com',
-                roleId: 'tenant_admin',
+                roleId: 'super_admin',
                 status: 'ACTIVE',
                 createdAt: new Date(),
               });
 
               // Retrieve role details
-              const roleDocRef = doc(db, 'roles', 'tenant_admin');
+              const roleDocRef = doc(db, 'roles', 'super_admin');
               const roleDocSnap = await getDoc(roleDocRef);
               const role = roleDocSnap.exists()
                 ? { id: roleDocSnap.id, ...roleDocSnap.data() } as any
-                : null;
+                : { id: 'super_admin', name: 'Super Admin', permissions: ['*:*'] };
 
               const profile = {
                 id: user.uid,
                 tenantId,
-                name: 'Riley Administrator',
+                company: 'all',
+                name: 'System Administrator',
                 email: 'admin@gmail.com',
-                roleId: 'tenant_admin',
+                roleId: 'super_admin',
                 status: 'ACTIVE',
                 createdAt: new Date(),
               } as any;
@@ -286,6 +287,14 @@ function App() {
                 element={
                   <GuardedRoute module="master" action="view">
                     <Machines />
+                  </GuardedRoute>
+                }
+              />
+              <Route
+                path="machines-toyo"
+                element={
+                  <GuardedRoute module="master" action="view">
+                    <MachineMasterToyo />
                   </GuardedRoute>
                 }
               />

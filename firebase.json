@@ -1,4 +1,10 @@
 {
+  "firestore": [
+    {
+      "database": "rileys-production-dashboard",
+      "rules": "firestore.rules"
+    }
+  ],
   "hosting": {
     "public": "dist",
     "ignore": [

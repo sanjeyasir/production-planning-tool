@@ -6,9 +6,9 @@ import {
   createUserWithEmailAndPassword 
 } from 'firebase/auth';
 import { doc, setDoc, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
-import { seedGlobalRoles } from '../seed';
+import { seedAllCompaniesAndRoles } from '../seed';
 import { useAuthStore } from '../store/authStore';
-import { RileysLogo } from '../components/RileysLogo';
+import { RileysToyoLogo } from '../components/RileysToyoLogo';
 import {
   Box,
   Card,
@@ -131,29 +131,36 @@ export const Login: React.FC = () => {
           emailLower === 'admin@gmail.com' &&
           password === 'admin123'
         ) {
-          // 1. Ensure global roles are seeded
-          await seedGlobalRoles();
+          // 1. Ensure global roles & multi-company data are seeded
+          await seedAllCompaniesAndRoles();
 
           // 2. Register default admin user
           userCredential = await createUserWithEmailAndPassword(auth, 'admin@gmail.com', 'admin123');
 
           const uid = userCredential.user.uid;
-          const tenantId = 'admin_tenant_gmail';
 
-          // 3. Create Tenant Profile
-          await setDoc(doc(db, 'tenants', tenantId), {
+          // 3. Create Tenant Profiles
+          await setDoc(doc(db, 'tenants', 'rileys'), {
             companyName: "Riley's Plant Operations",
             subscriptionPlan: 'ENTERPRISE',
             status: 'ACTIVE',
             createdAt: new Date(),
-          });
+          }, { merge: true });
 
-          // 4. Create User Profile
+          await setDoc(doc(db, 'tenants', 'toyo'), {
+            companyName: "Toyo Manufacturing",
+            subscriptionPlan: 'ENTERPRISE',
+            status: 'ACTIVE',
+            createdAt: new Date(),
+          }, { merge: true });
+
+          // 4. Create Super Admin User Profile with company: 'all'
           await setDoc(doc(db, 'users', uid), {
-            tenantId,
-            name: 'Riley Administrator',
+            tenantId: 'rileys',
+            company: 'all',
+            name: 'System Administrator',
             email: 'admin@gmail.com',
-            roleId: 'tenant_admin',
+            roleId: 'super_admin',
             status: 'ACTIVE',
             createdAt: new Date(),
           });
@@ -192,17 +199,17 @@ export const Login: React.FC = () => {
         overflow: 'hidden',
       }}
     >
-      {/* Ambient Red Glows */}
+      {/* Ambient Dual-Brand Glows (Crimson + Ocean Blue + Indigo) */}
       <Box
         sx={{
           position: 'absolute',
-          width: 520,
-          height: 520,
+          width: 540,
+          height: 540,
           borderRadius: '50%',
-          filter: 'blur(130px)',
-          background: 'radial-gradient(circle, rgba(239, 68, 68, 0.25) 0%, rgba(185, 28, 28, 0.1) 70%, transparent 100%)',
+          filter: 'blur(140px)',
+          background: 'radial-gradient(circle, rgba(239, 68, 68, 0.28) 0%, rgba(185, 28, 28, 0.08) 70%, transparent 100%)',
           top: '-15%',
-          left: '8%',
+          left: '5%',
           zIndex: 0,
           pointerEvents: 'none',
         }}
@@ -214,7 +221,7 @@ export const Login: React.FC = () => {
           height: 580,
           borderRadius: '50%',
           filter: 'blur(140px)',
-          background: 'radial-gradient(circle, rgba(185, 28, 28, 0.28) 0%, rgba(127, 29, 29, 0.12) 70%, transparent 100%)',
+          background: 'radial-gradient(circle, rgba(2, 132, 199, 0.3) 0%, rgba(3, 105, 161, 0.1) 70%, transparent 100%)',
           bottom: '-15%',
           right: '5%',
           zIndex: 0,
@@ -224,11 +231,11 @@ export const Login: React.FC = () => {
       <Box
         sx={{
           position: 'absolute',
-          width: 320,
-          height: 320,
+          width: 380,
+          height: 380,
           borderRadius: '50%',
-          filter: 'blur(90px)',
-          background: 'rgba(254, 202, 202, 0.08)',
+          filter: 'blur(100px)',
+          background: 'radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%)',
           top: '40%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
@@ -239,13 +246,13 @@ export const Login: React.FC = () => {
 
       <Card
         sx={{
-          maxWidth: 480,
+          maxWidth: 500,
           width: '100%',
           borderRadius: '24px',
-          border: '1px solid rgba(239, 68, 68, 0.25)',
-          bgcolor: 'rgba(18, 10, 14, 0.88)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+          bgcolor: 'rgba(15, 23, 42, 0.88)',
           backdropFilter: 'blur(24px)',
-          boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.8), 0 0 35px rgba(220, 38, 38, 0.15), inset 0 1px 0 rgba(254, 202, 202, 0.15)',
+          boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.85), 0 0 35px rgba(2, 132, 199, 0.16), 0 0 35px rgba(239, 68, 68, 0.16)',
           zIndex: 1,
           p: { xs: 3, sm: 4.5 },
           color: '#ffffff',
@@ -263,7 +270,7 @@ export const Login: React.FC = () => {
                 right: 0,
                 bottom: 0,
                 borderRadius: '24px',
-                bgcolor: 'rgba(14, 7, 10, 0.95)',
+                bgcolor: 'rgba(15, 23, 42, 0.96)',
                 backdropFilter: 'blur(16px)',
                 display: 'flex',
                 flexDirection: 'column',
@@ -275,22 +282,25 @@ export const Login: React.FC = () => {
                 textAlign: 'center',
               }}
             >
-              <RileysLogo size="lg" themeMode="red" variant="icon" />
-              <CircularProgress size={42} thickness={4.5} sx={{ color: '#ef4444' }} />
+              <RileysToyoLogo size="lg" variant="icon" />
+              <CircularProgress size={42} thickness={4.5} sx={{ color: '#38bdf8' }} />
               <Box>
                 <Typography variant="h6" sx={{ fontWeight: 800, color: '#ffffff', fontFamily: '"Outfit", sans-serif', letterSpacing: '-0.01em' }}>
                   Authenticating Session...
                 </Typography>
-                <Typography variant="caption" sx={{ color: '#fca5a5', display: 'block', mt: 0.5, fontWeight: 600, fontSize: '0.825rem' }}>
-                  Loading dashboard & production workspace...
+                <Typography variant="caption" sx={{ color: '#93c5fd', display: 'block', mt: 0.5, fontWeight: 600, fontSize: '0.825rem' }}>
+                  Loading Riley's &amp; Toyo production operations workspace...
                 </Typography>
               </Box>
             </Box>
           )}
 
-          {/* Brand Header with Fake Riley's Logo */}
+          {/* Unified Riley's & Toyo Brand Header */}
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', mb: 3 }}>
-            <RileysLogo size="lg" themeMode="red" variant="full" />
+            <RileysToyoLogo size="lg" variant="full" />
+            <Typography variant="body2" sx={{ color: '#94a3b8', mt: 1, fontWeight: 500, fontSize: '0.85rem' }}>
+              Integrated Operations, Dynamic Capacity &amp; Planning
+            </Typography>
           </Box>
 
           {error && (
@@ -315,7 +325,7 @@ export const Login: React.FC = () => {
           <form onSubmit={handleLogin}>
             <Stack spacing={2.2}>
               <Box>
-                <Typography variant="caption" sx={{ color: '#fecaca', fontWeight: 700, mb: 0.6, display: 'block', fontSize: '0.775rem' }}>
+                <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 700, mb: 0.6, display: 'block', fontSize: '0.775rem' }}>
                   Work Email Address
                 </Typography>
                 <TextField
@@ -330,7 +340,7 @@ export const Login: React.FC = () => {
                     input: {
                       startAdornment: (
                         <InputAdornment position="start">
-                          <EmailIcon sx={{ color: '#f87171', fontSize: 18 }} />
+                          <EmailIcon sx={{ color: '#ef4444', fontSize: 18 }} />
                         </InputAdornment>
                       ),
                     }
@@ -342,11 +352,11 @@ export const Login: React.FC = () => {
                       color: '#0f172a',
                       boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
                       '& fieldset': { borderColor: '#e2e8f0' },
-                      '&:hover fieldset': { borderColor: '#f87171' },
+                      '&:hover fieldset': { borderColor: '#38bdf8' },
                       '&.Mui-focused': {
-                        boxShadow: '0 0 0 3px rgba(239, 68, 68, 0.18)',
+                        boxShadow: '0 0 0 3px rgba(2, 132, 199, 0.2)',
                       },
-                      '&.Mui-focused fieldset': { borderColor: '#dc2626', borderWidth: '1.5px' },
+                      '&.Mui-focused fieldset': { borderColor: '#0284c7', borderWidth: '1.5px' },
                       '& input': {
                         color: '#0f172a',
                         fontWeight: 500,
@@ -359,7 +369,7 @@ export const Login: React.FC = () => {
 
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.6 }}>
-                  <Typography variant="caption" sx={{ color: '#fecaca', fontWeight: 700, fontSize: '0.775rem' }}>
+                  <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 700, fontSize: '0.775rem' }}>
                     Password
                   </Typography>
                   <Button
@@ -370,9 +380,9 @@ export const Login: React.FC = () => {
                       minWidth: 'auto',
                       fontSize: '0.725rem',
                       fontWeight: 700,
-                      color: '#f87171',
+                      color: '#38bdf8',
                       textTransform: 'none',
-                      '&:hover': { color: '#fca5a5', bgcolor: 'transparent' }
+                      '&:hover': { color: '#7dd3fc', bgcolor: 'transparent' }
                     }}
                   >
                     Forgot password?
@@ -390,7 +400,7 @@ export const Login: React.FC = () => {
                     input: {
                       startAdornment: (
                         <InputAdornment position="start">
-                          <LockIcon sx={{ color: '#f87171', fontSize: 18 }} />
+                          <LockIcon sx={{ color: '#0284c7', fontSize: 18 }} />
                         </InputAdornment>
                       ),
                       endAdornment: (
@@ -399,7 +409,7 @@ export const Login: React.FC = () => {
                             onClick={() => setShowPassword(!showPassword)}
                             edge="end"
                             size="small"
-                            sx={{ color: '#fca5a5' }}
+                            sx={{ color: '#94a3b8' }}
                           >
                             {showPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
                           </IconButton>
@@ -414,11 +424,11 @@ export const Login: React.FC = () => {
                       color: '#0f172a',
                       boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
                       '& fieldset': { borderColor: '#e2e8f0' },
-                      '&:hover fieldset': { borderColor: '#f87171' },
+                      '&:hover fieldset': { borderColor: '#38bdf8' },
                       '&.Mui-focused': {
-                        boxShadow: '0 0 0 3px rgba(239, 68, 68, 0.18)',
+                        boxShadow: '0 0 0 3px rgba(2, 132, 199, 0.2)',
                       },
-                      '&.Mui-focused fieldset': { borderColor: '#dc2626', borderWidth: '1.5px' },
+                      '&.Mui-focused fieldset': { borderColor: '#0284c7', borderWidth: '1.5px' },
                       '& input': {
                         color: '#0f172a',
                         fontWeight: 500,
@@ -442,18 +452,18 @@ export const Login: React.FC = () => {
                   fontWeight: 800,
                   fontSize: '0.925rem',
                   letterSpacing: '0.02em',
-                  background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #991b1b 100%)',
-                  boxShadow: '0 8px 24px -4px rgba(220, 38, 38, 0.55)',
-                  border: '1px solid rgba(254, 202, 202, 0.2)',
+                  background: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 45%, #0284c7 100%)',
+                  boxShadow: '0 8px 24px -4px rgba(2, 132, 199, 0.4), 0 8px 24px -4px rgba(239, 68, 68, 0.4)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
                   transition: 'all 0.2s ease',
                   '&:hover': {
-                    background: 'linear-gradient(135deg, #f87171 0%, #ef4444 50%, #b91c1c 100%)',
-                    boxShadow: '0 12px 28px -4px rgba(239, 68, 68, 0.65)',
+                    background: 'linear-gradient(135deg, #f87171 0%, #dc2626 40%, #0ea5e9 100%)',
+                    boxShadow: '0 12px 28px -4px rgba(2, 132, 199, 0.55), 0 12px 28px -4px rgba(239, 68, 68, 0.55)',
                     transform: 'translateY(-1px)',
                   },
                 }}
               >
-                {submitting ? <CircularProgress size={22} color="inherit" /> : 'Sign In to Portal'}
+                {submitting ? <CircularProgress size={22} color="inherit" /> : 'Sign In to Production Portal'}
               </Button>
             </Stack>
           </form>
@@ -463,15 +473,15 @@ export const Login: React.FC = () => {
             sx={{
               mt: 3,
               p: 1.5,
-              bgcolor: 'rgba(28, 14, 18, 0.7)',
+              bgcolor: 'rgba(30, 41, 59, 0.7)',
               borderRadius: '12px',
-              border: '1px solid rgba(239, 68, 68, 0.2)',
+              border: '1px solid rgba(2, 132, 199, 0.25)',
             }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Box>
-                <Typography variant="caption" sx={{ color: '#fca5a5', fontWeight: 700, display: 'block' }}>
-                  Default Admin Access:
+                <Typography variant="caption" sx={{ color: '#38bdf8', fontWeight: 700, display: 'block' }}>
+                  Default Admin Access (All Companies):
                 </Typography>
                 <Typography variant="caption" sx={{ color: '#ffffff', fontFamily: 'monospace', fontWeight: 600 }}>
                   admin@gmail.com / admin123
@@ -486,12 +496,12 @@ export const Login: React.FC = () => {
                   fontWeight: 700,
                   py: 0.3,
                   px: 1.2,
-                  color: '#fca5a5',
-                  borderColor: 'rgba(239, 68, 68, 0.4)',
-                  bgcolor: 'rgba(239, 68, 68, 0.08)',
+                  color: '#38bdf8',
+                  borderColor: 'rgba(2, 132, 199, 0.4)',
+                  bgcolor: 'rgba(2, 132, 199, 0.1)',
                   '&:hover': {
-                    borderColor: '#ef4444',
-                    bgcolor: 'rgba(239, 68, 68, 0.18)',
+                    borderColor: '#38bdf8',
+                    bgcolor: 'rgba(2, 132, 199, 0.22)',
                     color: '#ffffff',
                   },
                 }}

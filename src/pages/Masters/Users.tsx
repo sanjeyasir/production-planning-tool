@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/authStore';
 import {
   getUsers,
-  updateUserRole,
+  getAllUsers,
   updateUserStatus
 } from '../../services/db';
 import {
@@ -99,9 +99,9 @@ export const Users: React.FC = () => {
 
   // Queries
   const { data: users = [], isLoading: loadingUsers } = useQuery({
-    queryKey: ['users', tenantId],
-    queryFn: () => getUsers(tenantId),
-    enabled: !!tenantId,
+    queryKey: ['users', tenantId, isSuperAdmin],
+    queryFn: () => isSuperAdmin ? getAllUsers() : getUsers(tenantId),
+    enabled: !!tenantId || isSuperAdmin,
   });
 
   const { data: resetRequests = [], isLoading: loadingResets, refetch: refetchResets } = useQuery({
@@ -124,12 +124,14 @@ export const Users: React.FC = () => {
     email: string;
     password: string;
     roleId: string;
+    company: string;
     permissions: string[];
   }>({
     name: '',
     email: '',
     password: '',
     roleId: 'viewer',
+    company: 'rileys',
     permissions: ['downtime:view', 'production:view']
   });
   const [creating, setCreating] = useState(false);
@@ -138,10 +140,12 @@ export const Users: React.FC = () => {
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [editFormData, setEditFormData] = useState<{
     roleId: string;
+    company: string;
     status: string;
     permissions: string[];
   }>({
     roleId: '',
+    company: 'rileys',
     status: 'ACTIVE',
     permissions: []
   });
@@ -151,10 +155,11 @@ export const Users: React.FC = () => {
   // Filtering users
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
-      const name = u.name.toLowerCase();
-      const email = u.email.toLowerCase();
+      const name = (u.name || '').toLowerCase();
+      const email = (u.email || '').toLowerCase();
+      const company = (u.company || u.tenantId || '').toLowerCase();
       const match = search.toLowerCase();
-      return name.includes(match) || email.includes(match);
+      return name.includes(match) || email.includes(match) || company.includes(match);
     });
   }, [users, search]);
 
@@ -162,6 +167,7 @@ export const Users: React.FC = () => {
     setEditingUser(user);
     setEditFormData({
       roleId: user.roleId,
+      company: user.company || (user.tenantId === 'toyo' ? 'toyo' : 'rileys'),
       status: user.status,
       permissions: user.permissions || []
     });
@@ -203,29 +209,21 @@ export const Users: React.FC = () => {
     mutationFn: async () => {
       if (!editingUser) return;
       
-      const roleChanged = editingUser.roleId !== editFormData.roleId;
-      const statusChanged = editingUser.status !== editFormData.status;
-      const permissionsChanged = JSON.stringify(editingUser.permissions || []) !== JSON.stringify(editFormData.permissions);
+      const userDocRef = doc(db, 'users', editingUser.id);
+      const targetTenant = editFormData.company === 'all' ? 'rileys' : editFormData.company;
 
-      if (roleChanged) {
-        await updateUserRole(editingUser.id, editFormData.roleId);
-      }
-
-      if (statusChanged) {
-        await updateUserStatus(editingUser.id, editFormData.status);
-      }
-
-      if (permissionsChanged || roleChanged || statusChanged) {
-        const userDocRef = doc(db, 'users', editingUser.id);
-        await updateDoc(userDocRef, {
-          permissions: editFormData.permissions
-        });
-      }
+      await updateDoc(userDocRef, {
+        roleId: editFormData.roleId,
+        company: editFormData.company,
+        tenantId: targetTenant,
+        status: editFormData.status,
+        permissions: editFormData.permissions
+      });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
       setEditDialogOpen(false);
-      setNotification({ open: true, message: 'User updated successfully!', severity: 'success' });
+      setNotification({ open: true, message: 'User role & company access updated successfully!', severity: 'success' });
     },
     onError: (err: any) => {
       setNotification({ open: true, message: `Failed to update user: ${err.message}`, severity: 'error' });
@@ -238,7 +236,7 @@ export const Users: React.FC = () => {
       await updateUserStatus(user.id, nextStatus);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
       setNotification({ open: true, message: 'User status updated!', severity: 'success' });
     }
   });
@@ -267,8 +265,11 @@ export const Users: React.FC = () => {
       const secondaryUser = await registerSecondaryUser(emailLower, createFormData.password);
       const newUid = secondaryUser.uid;
 
+      const targetTenant = createFormData.company === 'all' ? 'rileys' : createFormData.company;
+
       await setDoc(doc(db, 'users', newUid), {
-        tenantId,
+        tenantId: targetTenant,
+        company: createFormData.company,
         name: createFormData.name.trim(),
         email: emailLower,
         roleId: createFormData.roleId,
@@ -278,10 +279,17 @@ export const Users: React.FC = () => {
         createdAt: new Date()
       });
 
-      queryClient.invalidateQueries({ queryKey: ['users', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
       setCreateDialogOpen(false);
-      setCreateFormData({ name: '', email: '', password: '', roleId: 'viewer', permissions: ['downtime:view', 'production:view'] });
-      setNotification({ open: true, message: 'User created successfully! They will change their password on first login.', severity: 'success' });
+      setCreateFormData({ 
+        name: '', 
+        email: '', 
+        password: '', 
+        roleId: 'viewer', 
+        company: 'rileys',
+        permissions: ['downtime:view', 'production:view'] 
+      });
+      setNotification({ open: true, message: 'User created successfully with company access! They will change their password on first login.', severity: 'success' });
     } catch (err: any) {
       setNotification({ open: true, message: `Failed to create user: ${err.message}`, severity: 'error' });
     } finally {
@@ -361,71 +369,91 @@ export const Users: React.FC = () => {
                     <TableCell>User Details</TableCell>
                     <TableCell>Email</TableCell>
                     <TableCell>Role</TableCell>
+                    <TableCell>Company Access</TableCell>
                     <TableCell align="center">Status</TableCell>
                     {isSuperAdmin && <TableCell align="right">Actions</TableCell>}
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {filteredUsers.length > 0 ? (
-                    filteredUsers.map((u) => (
-                      <TableRow key={u.id} hover>
-                        <TableCell>
-                          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                            <Avatar sx={{ bgcolor: '#10b981', width: 32, height: 32, fontSize: '0.8rem', fontWeight: 700 }}>
-                              {u.name?.charAt(0).toUpperCase()}
-                            </Avatar>
-                            <Typography variant="body2" sx={{ fontWeight: 600, color: '#0f172a' }}>
-                              {u.name} {u.id === userId && <span style={{ color: '#6366f1', fontSize: '0.75rem', fontWeight: 700 }}>(You)</span>}
-                            </Typography>
-                          </Stack>
-                        </TableCell>
-                        <TableCell sx={{ color: '#475569' }}>{u.email}</TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <SecurityIcon sx={{ color: '#6366f1', fontSize: 17 }} />
-                            <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155' }}>
-                              {ROLE_MAP[u.roleId] || 'Viewer'}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell align="center">
-                          <Chip
-                            size="small"
-                            label={u.status}
-                            sx={{
-                              fontWeight: 700,
-                              bgcolor: u.status === 'ACTIVE' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                              color: u.status === 'ACTIVE' ? '#059669' : '#dc2626',
-                              fontSize: '0.7rem'
-                            }}
-                          />
-                        </TableCell>
-                        {isSuperAdmin && (
-                          <TableCell align="right">
-                            {u.id !== userId ? (
-                              <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', alignItems: 'center' }}>
-                                <Tooltip title="Toggle Status">
-                                  <IconButton onClick={() => toggleUserStatusMutation.mutate(u)} size="small">
-                                    {u.status === 'ACTIVE' ? (
-                                      <ToggleOnIcon sx={{ color: '#10b981', fontSize: 26 }} />
-                                    ) : (
-                                      <ToggleOffIcon sx={{ color: '#94a3b8', fontSize: 26 }} />
-                                    )}
-                                  </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Modify Access">
-                                  <IconButton onClick={() => handleEditClick(u)} size="small" sx={{ color: '#6366f1' }}>
-                                    <EditIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              </Stack>
-                            ) : (
-                              <Typography variant="caption" sx={{ color: '#94a3b8', pr: 1.5 }}>Self account</Typography>
-                            )}
+                    filteredUsers.map((u) => {
+                      const isToyo = u.company === 'toyo' || u.tenantId === 'toyo';
+                      const isAll = u.company === 'all' || u.email === 'admin@gmail.com';
+                      const compLabel = isToyo ? 'Toyo' : isAll ? 'All Companies (Admin)' : "Riley's";
+
+                      return (
+                        <TableRow key={u.id} hover>
+                          <TableCell>
+                            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                              <Avatar sx={{ bgcolor: isToyo ? '#0284c7' : '#6366f1', width: 32, height: 32, fontSize: '0.8rem', fontWeight: 700 }}>
+                                {u.name?.charAt(0).toUpperCase()}
+                              </Avatar>
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: '#0f172a' }}>
+                                {u.name} {u.id === userId && <span style={{ color: '#6366f1', fontSize: '0.75rem', fontWeight: 700 }}>(You)</span>}
+                              </Typography>
+                            </Stack>
                           </TableCell>
-                        )}
-                      </TableRow>
-                    ))
+                          <TableCell sx={{ color: '#475569' }}>{u.email}</TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <SecurityIcon sx={{ color: '#6366f1', fontSize: 17 }} />
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155' }}>
+                                {ROLE_MAP[u.roleId] || 'Viewer'}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              label={compLabel}
+                              sx={{
+                                fontWeight: 700,
+                                fontSize: '0.725rem',
+                                bgcolor: isToyo ? 'rgba(2, 132, 199, 0.1)' : isAll ? 'rgba(147, 51, 234, 0.1)' : 'rgba(99, 102, 241, 0.1)',
+                                color: isToyo ? '#0284c7' : isAll ? '#9333ea' : '#4f46e5',
+                                border: `1px solid ${isToyo ? 'rgba(2, 132, 199, 0.3)' : isAll ? 'rgba(147, 51, 234, 0.3)' : 'rgba(99, 102, 241, 0.3)'}`
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell align="center">
+                            <Chip
+                              size="small"
+                              label={u.status}
+                              sx={{
+                                fontWeight: 700,
+                                bgcolor: u.status === 'ACTIVE' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                color: u.status === 'ACTIVE' ? '#059669' : '#dc2626',
+                                fontSize: '0.7rem'
+                              }}
+                            />
+                          </TableCell>
+                          {isSuperAdmin && (
+                            <TableCell align="right">
+                              {u.id !== userId ? (
+                                <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', alignItems: 'center' }}>
+                                  <Tooltip title="Toggle Status">
+                                    <IconButton onClick={() => toggleUserStatusMutation.mutate(u)} size="small">
+                                      {u.status === 'ACTIVE' ? (
+                                        <ToggleOnIcon sx={{ color: '#10b981', fontSize: 26 }} />
+                                      ) : (
+                                        <ToggleOffIcon sx={{ color: '#94a3b8', fontSize: 26 }} />
+                                      )}
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="Modify Access & Company">
+                                    <IconButton onClick={() => handleEditClick(u)} size="small" sx={{ color: '#6366f1' }}>
+                                      <EditIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                </Stack>
+                              ) : (
+                                <Typography variant="caption" sx={{ color: '#94a3b8', pr: 1.5 }}>Self account</Typography>
+                              )}
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })
                   ) : (
                     <TableRow>
                       <TableCell colSpan={5} align="center" sx={{ py: 6, color: '#64748b' }}>
@@ -559,6 +587,19 @@ export const Users: React.FC = () => {
                 </Select>
               </FormControl>
 
+              <FormControl fullWidth size="small" required>
+                <InputLabel>Company Access</InputLabel>
+                <Select
+                  label="Company Access"
+                  value={createFormData.company}
+                  onChange={(e) => setCreateFormData({ ...createFormData, company: e.target.value })}
+                >
+                  <MenuItem value="rileys">Riley's Plant Operations</MenuItem>
+                  <MenuItem value="toyo">Toyo Manufacturing</MenuItem>
+                  {isSuperAdmin && <MenuItem value="all">All Companies (Super Admin)</MenuItem>}
+                </Select>
+              </FormControl>
+
               <Box>
                 <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', display: 'block', mb: 1 }}>
                   Screen Access Permissions
@@ -627,6 +668,19 @@ export const Users: React.FC = () => {
                   <MenuItem value="supervisor">Supervisor</MenuItem>
                   <MenuItem value="operator">Operator</MenuItem>
                   <MenuItem value="viewer">Viewer</MenuItem>
+                </Select>
+              </FormControl>
+
+              <FormControl fullWidth size="small" required>
+                <InputLabel>Company Access</InputLabel>
+                <Select
+                  label="Company Access"
+                  value={editFormData.company}
+                  onChange={(e) => setEditFormData({ ...editFormData, company: e.target.value })}
+                >
+                  <MenuItem value="rileys">Riley's Plant Operations</MenuItem>
+                  <MenuItem value="toyo">Toyo Manufacturing</MenuItem>
+                  {isSuperAdmin && <MenuItem value="all">All Companies (Super Admin)</MenuItem>}
                 </Select>
               </FormControl>
 

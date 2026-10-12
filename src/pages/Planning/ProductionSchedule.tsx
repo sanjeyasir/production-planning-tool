@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/authStore';
 import {
   getMachines,
+  getMachineDailyCapacities,
   getProductionOrders,
   getProductionCategories,
   getHolidays,
@@ -104,6 +105,30 @@ export const ProductionSchedule: React.FC = () => {
     queryFn: () => getDowntimeRecords(tenantId),
     enabled: !!tenantId,
   });
+
+  const { data: dailyCapacities = [] } = useQuery({
+    queryKey: ['machineDailyCapacities', tenantId],
+    queryFn: () => getMachineDailyCapacities(tenantId),
+    enabled: !!tenantId,
+  });
+
+  const dailyCapacityMap = useMemo(() => {
+    const map: Record<string, { dailyCapacity: number; operatingHours: number }> = {};
+    dailyCapacities.forEach(dc => {
+      map[`${dc.machineId}_${dc.dateStr}`] = {
+        dailyCapacity: dc.dailyCapacity,
+        operatingHours: dc.operatingHours
+      };
+    });
+    return map;
+  }, [dailyCapacities]);
+
+  const getMachineCapacityOnDate = (m: Machine, dStr: string) => {
+    const dayOverride = dailyCapacityMap[`${m.id}_${dStr}`];
+    const opHours = dayOverride ? dayOverride.operatingHours : (Number(m.operatingHours) === 12 ? 12 : 24);
+    const dailyCap = dayOverride ? dayOverride.dailyCapacity : (Number(m.dailyCapacity) || ((Number(m.capacity) || 0) * opHours));
+    return { opHours, dailyCap };
+  };
 
   const activeMachines = useMemo(() => {
     return machines.filter(m => m.status === 'ACTIVE');
@@ -916,9 +941,16 @@ export const ProductionSchedule: React.FC = () => {
                                     </Tooltip>
                                   </Box>
                                 )}
-                                <Typography variant="caption" sx={{ color: '#cbd5e1', fontSize: '0.7rem', display: 'block', mt: hasFuturePlans ? 0 : 1 }}>
-                                  — Free —
-                                </Typography>
+                                {(() => {
+                                  const { opHours: dayOpHours, dailyCap: dayDailyCap } = getMachineCapacityOnDate(machine, dateStr);
+                                  return (
+                                    <Tooltip title={`Available Capacity on ${dateStr}: ${dayDailyCap.toLocaleString()} units (${dayOpHours}h config)`}>
+                                      <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.68rem', display: 'block', mt: hasFuturePlans ? 0 : 1 }}>
+                                        — Free ({dayDailyCap > 0 ? `${dayDailyCap.toLocaleString()}u` : '0u'}) —
+                                      </Typography>
+                                    </Tooltip>
+                                  );
+                                })()}
                               </TableCell>
                             );
                           })}
