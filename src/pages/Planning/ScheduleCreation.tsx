@@ -10,6 +10,7 @@ import {
   getProductionPlans,
   getDowntimeRecords,
   getProductionCategories,
+  getSections,
   getPlants,
   createProductionPlan,
   updateProductionPlan,
@@ -19,7 +20,8 @@ import {
   type Machine,
   type ProductionOrder,
   type Holiday,
-  type ProductionPlan
+  type ProductionPlan,
+  type DowntimeRecord
 } from '../../services/db';
 import {
   Box,
@@ -69,6 +71,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import TableViewIcon from '@mui/icons-material/TableView';
 import DateRangeIcon from '@mui/icons-material/DateRange';
 import CategoryIcon from '@mui/icons-material/Category';
+import LayersIcon from '@mui/icons-material/Layers';
 import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturing';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 import LockIcon from '@mui/icons-material/Lock';
@@ -76,6 +79,7 @@ import BuildIcon from '@mui/icons-material/Build';
 import EventBusyIcon from '@mui/icons-material/EventBusy';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import TuneIcon from '@mui/icons-material/Tune';
+import BlockIcon from '@mui/icons-material/Block';
 
 // Handsontable
 import { HotTable } from '@handsontable/react';
@@ -106,77 +110,87 @@ export interface TentativeAllocation {
 export const ScheduleCreation: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { tenant } = useAuthStore();
-  const tenantId = tenant?.id || '';
+  const { tenant, activeCompany } = useAuthStore();
+  const currentTenantId = activeCompany || tenant?.id || 'rileys';
+  const isToyo = currentTenantId === 'toyo';
+  const tenantId = currentTenantId; // compatibility alias
 
   // ----------------------------------------------------
   // QUERIES
   // ----------------------------------------------------
   const { data: machines = [] } = useQuery({
-    queryKey: ['machines', tenantId],
-    queryFn: () => getMachines(tenantId),
-    enabled: !!tenantId,
+    queryKey: ['machines', currentTenantId],
+    queryFn: () => getMachines(currentTenantId),
+    enabled: !!currentTenantId,
   });
 
   const { data: orders = [], isLoading: loadingOrders } = useQuery({
-    queryKey: ['productionOrders', tenantId],
-    queryFn: () => getProductionOrders(tenantId),
-    enabled: !!tenantId,
+    queryKey: ['productionOrders', currentTenantId],
+    queryFn: () => getProductionOrders(currentTenantId),
+    enabled: !!currentTenantId,
+  });
+
+  const { data: sections = [] } = useQuery({
+    queryKey: ['sections', currentTenantId],
+    queryFn: () => getSections(currentTenantId),
+    enabled: isToyo && !!currentTenantId,
   });
 
   const { data: categories = [] } = useQuery({
-    queryKey: ['productionCategories', tenantId],
-    queryFn: () => getProductionCategories(tenantId),
-    enabled: !!tenantId,
+    queryKey: ['productionCategories', currentTenantId],
+    queryFn: () => getProductionCategories(currentTenantId),
+    enabled: !isToyo && !!currentTenantId,
   });
 
   const { data: plants = [] } = useQuery({
-    queryKey: ['plants', tenantId],
-    queryFn: () => getPlants(tenantId),
-    enabled: !!tenantId,
+    queryKey: ['plants', currentTenantId],
+    queryFn: () => getPlants(currentTenantId),
+    enabled: !!currentTenantId,
   });
 
   const { data: holidays = [] } = useQuery({
-    queryKey: ['holidays', tenantId],
-    queryFn: () => getHolidays(tenantId),
-    enabled: !!tenantId,
+    queryKey: ['holidays', currentTenantId],
+    queryFn: () => getHolidays(currentTenantId),
+    enabled: !!currentTenantId,
   });
 
   const { data: existingPlans = [] } = useQuery({
-    queryKey: ['productionPlans', tenantId],
-    queryFn: () => getProductionPlans(tenantId),
-    enabled: !!tenantId,
+    queryKey: ['productionPlans', currentTenantId],
+    queryFn: () => getProductionPlans(currentTenantId),
+    enabled: !!currentTenantId,
   });
 
   const { data: downtimeRecords = [] } = useQuery({
-    queryKey: ['downtimeRecords', tenantId],
-    queryFn: () => getDowntimeRecords(tenantId),
-    enabled: !!tenantId,
+    queryKey: ['downtimeRecords', currentTenantId],
+    queryFn: () => getDowntimeRecords(currentTenantId),
+    enabled: !!currentTenantId,
   });
 
   const { data: dailyCapacities = [] } = useQuery({
-    queryKey: ['machineDailyCapacities', tenantId],
-    queryFn: () => getMachineDailyCapacities(tenantId),
-    enabled: !!tenantId,
+    queryKey: ['machineDailyCapacities', currentTenantId],
+    queryFn: () => getMachineDailyCapacities(currentTenantId),
+    enabled: !!currentTenantId,
   });
 
   const dailyCapacityMap = useMemo(() => {
-    const map: Record<string, { dailyCapacity: number; operatingHours: number }> = {};
+    const map: Record<string, {
+      dailyCapacity: number;
+      operatingHours: number;
+      baseDailyCapacity?: number;
+      reason?: string;
+      notes?: string;
+    }> = {};
     dailyCapacities.forEach(dc => {
       map[`${dc.machineId}_${dc.dateStr}`] = {
-        dailyCapacity: dc.dailyCapacity,
-        operatingHours: dc.operatingHours
+        dailyCapacity: Number(dc.dailyCapacity) || 0,
+        operatingHours: dc.operatingHours === 12 ? 12 : 24,
+        baseDailyCapacity: dc.baseDailyCapacity,
+        reason: dc.reason || '',
+        notes: dc.notes || ''
       };
     });
     return map;
   }, [dailyCapacities]);
-
-  const getMachineCapacityOnDate = (m: Machine, dStr: string) => {
-    const dayOverride = dailyCapacityMap[`${m.id}_${dStr}`];
-    const opHours = dayOverride ? dayOverride.operatingHours : (Number(m.operatingHours) === 12 ? 12 : 24);
-    const dailyCap = dayOverride ? dayOverride.dailyCapacity : (Number(m.dailyCapacity) || 1000);
-    return { opHours, dailyCap };
-  };
 
   // ----------------------------------------------------
   // STATE
@@ -185,7 +199,7 @@ export const ScheduleCreation: React.FC = () => {
   const [windowStartDate, setWindowStartDate] = useState<string>(toLocalDateString(new Date()));
   const [horizonDays, setHorizonDays] = useState<number>(7);
   const [selectedPlantFilter, setSelectedPlantFilter] = useState<string>('all');
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('all');
   const [selectedOrderToAllocate, setSelectedOrderToAllocate] = useState<ProductionOrder | null>(null);
 
   // Tentative Allocations in Simulation
@@ -199,6 +213,9 @@ export const ScheduleCreation: React.FC = () => {
     existingAllocations: TentativeAllocation[];
     availableCap: number;
     effectiveCap: number;
+    dailyCapacity?: number;
+    baseDailyCapacity?: number;
+    isCapacityUpdated?: boolean;
   }>({
     open: false,
     machine: null,
@@ -281,67 +298,133 @@ export const ScheduleCreation: React.FC = () => {
     return map;
   }, [categories]);
 
+  const sectionMap = useMemo(() => {
+    const map: Record<string, any> = {};
+    sections.forEach(s => { map[s.id] = s; });
+    return map;
+  }, [sections]);
+
   const plantMap = useMemo(() => {
     const map: Record<string, string> = {};
     plants.forEach(p => { map[p.id] = p.plantName; });
     return map;
   }, [plants]);
 
-  // Group active machines by Category for category-machine wise split & timeline presentation
-  const groupedMachinesByCategory = useMemo(() => {
+  interface GroupedMachineSection {
+    groupId: string;
+    groupName: string;
+    groupCode?: string;
+    machines: typeof activeMachines;
+    totalDailyCapacity: number;
+    categoryId: string; // compatibility alias
+    categoryName: string; // compatibility alias
+  }
+
+  // Group active machines by Section (Toyo) or Category (Riley's)
+  const groupedMachines = useMemo(() => {
     const filtered = activeMachines.filter(m => {
-      if (selectedCategoryId !== 'all') {
-        if (selectedCategoryId === 'uncategorized') {
-          if (m.categoryId && categoryMap[m.categoryId]) return false;
-        } else if (m.categoryId !== selectedCategoryId) {
-          return false;
+      if (selectedGroupFilter !== 'all') {
+        if (isToyo) {
+          if (selectedGroupFilter === 'unassigned') {
+            if (m.sectionId && sectionMap[m.sectionId]) return false;
+          } else if (m.sectionId !== selectedGroupFilter) {
+            return false;
+          }
+        } else {
+          if (selectedGroupFilter === 'uncategorized') {
+            if (m.categoryId && categoryMap[m.categoryId]) return false;
+          } else if (m.categoryId !== selectedGroupFilter) {
+            return false;
+          }
         }
       }
       return true;
     });
 
-    const groups: Array<{
-      categoryId: string;
-      categoryName: string;
-      machines: typeof activeMachines;
-      totalDailyCapacity: number;
-    }> = [];
+    const groups: GroupedMachineSection[] = [];
 
-    // 1. Group by existing categories
-    categories.forEach(cat => {
-      if (selectedCategoryId !== 'all' && selectedCategoryId !== cat.id) return;
-      const machs = filtered.filter(m => m.categoryId === cat.id);
-      if (machs.length > 0) {
-        const totalDailyCapacity = machs.reduce((sum, m) => {
+    if (isToyo) {
+      // 1. Group by Toyo Sections
+      sections.forEach(sec => {
+        if (selectedGroupFilter !== 'all' && selectedGroupFilter !== sec.id) return;
+        const machs = filtered.filter(m => m.sectionId === sec.id || (m.sectionName && m.sectionName.toLowerCase() === sec.sectionName.toLowerCase()));
+        if (machs.length > 0) {
+          const totalDailyCapacity = machs.reduce((sum, m) => {
+            const op = Number(m.operatingHours) || 24;
+            return sum + (Number(m.dailyCapacity) || ((Number(m.capacity) || 0) * op));
+          }, 0);
+          groups.push({
+            groupId: sec.id,
+            groupName: sec.sectionName,
+            groupCode: sec.sectionCode,
+            categoryId: sec.id,
+            categoryName: sec.sectionName,
+            machines: machs,
+            totalDailyCapacity
+          });
+        }
+      });
+
+      // 2. Unassigned Toyo sections
+      const unassigned = filtered.filter(m => !m.sectionId || !sectionMap[m.sectionId]);
+      if (unassigned.length > 0 && (selectedGroupFilter === 'all' || selectedGroupFilter === 'unassigned')) {
+        const totalDailyCapacity = unassigned.reduce((sum, m) => {
           const op = Number(m.operatingHours) || 24;
           return sum + (Number(m.dailyCapacity) || ((Number(m.capacity) || 0) * op));
         }, 0);
         groups.push({
-          categoryId: cat.id,
-          categoryName: cat.name,
-          machines: machs,
+          groupId: 'unassigned',
+          groupName: 'General / Unassigned Sections',
+          categoryId: 'unassigned',
+          categoryName: 'General / Unassigned Sections',
+          machines: unassigned,
           totalDailyCapacity
         });
       }
-    });
-
-    // 2. Uncategorized machines
-    const uncategorized = filtered.filter(m => !m.categoryId || !categoryMap[m.categoryId]);
-    if (uncategorized.length > 0 && (selectedCategoryId === 'all' || selectedCategoryId === 'uncategorized')) {
-      const totalDailyCapacity = uncategorized.reduce((sum, m) => {
-        const op = Number(m.operatingHours) || 24;
-        return sum + (Number(m.dailyCapacity) || ((Number(m.capacity) || 0) * op));
-      }, 0);
-      groups.push({
-        categoryId: 'uncategorized',
-        categoryName: 'General / Uncategorized Operations',
-        machines: uncategorized,
-        totalDailyCapacity
+    } else {
+      // 1. Group by Riley's Categories
+      categories.forEach(cat => {
+        if (selectedGroupFilter !== 'all' && selectedGroupFilter !== cat.id) return;
+        const machs = filtered.filter(m => m.categoryId === cat.id);
+        if (machs.length > 0) {
+          const totalDailyCapacity = machs.reduce((sum, m) => {
+            const op = Number(m.operatingHours) || 24;
+            return sum + (Number(m.dailyCapacity) || ((Number(m.capacity) || 0) * op));
+          }, 0);
+          groups.push({
+            groupId: cat.id,
+            groupName: cat.name,
+            categoryId: cat.id,
+            categoryName: cat.name,
+            machines: machs,
+            totalDailyCapacity
+          });
+        }
       });
+
+      // 2. Uncategorized Riley's machines
+      const uncategorized = filtered.filter(m => !m.categoryId || !categoryMap[m.categoryId]);
+      if (uncategorized.length > 0 && (selectedGroupFilter === 'all' || selectedGroupFilter === 'uncategorized')) {
+        const totalDailyCapacity = uncategorized.reduce((sum, m) => {
+          const op = Number(m.operatingHours) || 24;
+          return sum + (Number(m.dailyCapacity) || ((Number(m.capacity) || 0) * op));
+        }, 0);
+        groups.push({
+          groupId: 'uncategorized',
+          groupName: 'General / Uncategorized Operations',
+          categoryId: 'uncategorized',
+          categoryName: 'General / Uncategorized Operations',
+          machines: uncategorized,
+          totalDailyCapacity
+        });
+      }
     }
 
     return groups;
-  }, [activeMachines, categories, selectedCategoryId, categoryMap]);
+  }, [activeMachines, isToyo, sections, categories, selectedGroupFilter, sectionMap, categoryMap]);
+
+  // Backwards compatibility alias
+  const groupedMachinesByCategory = groupedMachines;
 
   const holidayMap = useMemo(() => {
     const map: Record<string, Holiday> = {};
@@ -352,17 +435,116 @@ export const ScheduleCreation: React.FC = () => {
     return map;
   }, [holidays]);
 
-  // Downtime minutes grouped by machineId_dateStr
-  const downtimeMap = useMemo(() => {
-    const map: Record<string, number> = {};
+  // Downtime records grouped by machineId_dateStr (supports both dateStr and startTime)
+  const downtimeRecordMap = useMemo(() => {
+    const map: Record<string, DowntimeRecord[]> = {};
     downtimeRecords.forEach(d => {
-      const dStr = toLocalDateString(d.startTime);
+      const dStr = d.dateStr || toLocalDateString(d.startTime);
       const key = `${d.machineId}_${dStr}`;
-      const dur = Number(d.duration) || 0;
-      map[key] = (map[key] || 0) + (Number.isFinite(dur) ? dur : 0);
+      if (!map[key]) map[key] = [];
+      map[key].push(d);
     });
     return map;
   }, [downtimeRecords]);
+
+  // Downtime minutes grouped by machineId_dateStr
+  const downtimeMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const key in downtimeRecordMap) {
+      map[key] = downtimeRecordMap[key].reduce((sum, d) => sum + (Number(d.duration) || 0), 0);
+    }
+    return map;
+  }, [downtimeRecordMap]);
+
+  interface SlotStatus {
+    holiday: Holiday | null;
+    isHoliday: boolean;
+    isScheduledDowntime: boolean;
+    downtimeReason: string;
+    downtimeSource?: 'record' | 'capacity_override';
+    dailyCapacity: number; // The day's capacity (updated if customized in Toyo machine master, else base machine daily capacity)
+    baseDailyCapacity: number; // Base machine daily capacity
+    isCapacityUpdated: boolean; // true if updated capacity differs from base
+    operatingHours: number;
+    effectiveCapacity: number; // 0 if holiday or scheduled downtime, else dailyCapacity
+    canSchedule: boolean; // false if holiday or scheduled downtime, true otherwise
+    blockReason?: string;
+  }
+
+  const getMachineSlotStatus = (m: Machine, dateStr: string): SlotStatus => {
+    const key = `${m.id}_${dateStr}`;
+    const holiday = holidayMap[dateStr] || null;
+    const isHoliday = !!holiday;
+
+    // 1. Check machine daily capacity override (from Toyo Machine Master or Daily Capacity DB)
+    const dayOverride = dailyCapacityMap[key];
+    const baseDailyCapacity = Number(m.dailyCapacity) || 1000;
+    const operatingHours = dayOverride ? dayOverride.operatingHours : (Number(m.operatingHours) === 12 ? 12 : 24);
+    
+    // Updated day capacity: if an override exists for this date, use it; otherwise use base daily capacity
+    const dailyCapacity = dayOverride !== undefined ? dayOverride.dailyCapacity : baseDailyCapacity;
+    const isCapacityUpdated = dayOverride !== undefined && dayOverride.dailyCapacity !== baseDailyCapacity;
+
+    // 2. Check for Scheduled Downtime
+    // A) From downtime_records (both Riley's and Toyo)
+    const dtRecords = downtimeRecordMap[key] || [];
+    const hasDtRecord = dtRecords.length > 0;
+
+    // B) From machine_daily_capacities override (e.g. Toyo Machine Master setting 0 capacity or Scheduled Downtime reason)
+    const reasonLower = (dayOverride?.reason || '').toLowerCase();
+    const hasCapacityDowntime = dayOverride !== undefined && (
+      dayOverride.dailyCapacity === 0 ||
+      reasonLower.includes('downtime') ||
+      reasonLower.includes('maintenance') ||
+      reasonLower.includes('breakdown') ||
+      reasonLower.includes('shutdown') ||
+      reasonLower.includes('service')
+    );
+
+    const isScheduledDowntime = hasDtRecord || hasCapacityDowntime;
+
+    let downtimeReason = '';
+    let downtimeSource: 'record' | 'capacity_override' | undefined = undefined;
+
+    if (hasDtRecord) {
+      downtimeSource = 'record';
+      const r = dtRecords[0];
+      downtimeReason = r.remarks || r.reason || (categoryMap[r.categoryId]) || 'Scheduled Downtime';
+    } else if (hasCapacityDowntime) {
+      downtimeSource = 'capacity_override';
+      downtimeReason = dayOverride?.reason || (dayOverride?.dailyCapacity === 0 ? 'Scheduled Downtime' : 'Maintenance');
+    }
+
+    // 3. Determine Effective Available Capacity & Scheduling Eligibility
+    let effectiveCapacity = dailyCapacity;
+    let canSchedule = true;
+    let blockReason: string | undefined = undefined;
+
+    if (isHoliday) {
+      effectiveCapacity = 0;
+      canSchedule = false;
+      blockReason = `Factory Holiday: ${holiday?.name || 'Closed'}`;
+    } else if (isScheduledDowntime) {
+      effectiveCapacity = 0; // Strictly 0 free capacity on scheduled downtime!
+      canSchedule = false;
+      blockReason = `Scheduled Downtime: ${downtimeReason}`;
+    }
+
+    return {
+      holiday,
+      isHoliday,
+      isScheduledDowntime,
+      downtimeReason,
+      downtimeSource,
+      dailyCapacity,
+      baseDailyCapacity,
+      isCapacityUpdated,
+      operatingHours,
+      effectiveCapacity,
+      canSchedule,
+      blockReason
+    };
+  };
 
   // Existing confirmed/draft plans volume grouped by machineId_dateStr (with dailyVolumeOverrides support)
   const existingPlanVolumeMap = useMemo(() => {
@@ -536,7 +718,22 @@ export const ScheduleCreation: React.FC = () => {
   // Handsontable Data Format
   const hotOrdersData = useMemo(() => {
     return pendingOrders.map((o, idx) => {
-      const catName = categoryMap[o.categoryId] || 'General';
+      let groupLabel = 'General';
+      if (isToyo) {
+        const secId = (o as any).sectionId;
+        if (secId && sectionMap[secId]) {
+          groupLabel = sectionMap[secId].sectionName;
+        } else {
+          const plan = existingPlans.find(p => p.orderId === o.id);
+          const mach = plan ? machines.find(m => m.id === plan.machineId) : null;
+          if (mach?.sectionName) {
+            groupLabel = mach.sectionName;
+          }
+        }
+      } else {
+        groupLabel = categoryMap[o.categoryId] || 'General';
+      }
+
       const targetQty = getOrderTargetVolume(o, existingPlans);
       const simAllocated = tentativeOrderAllocatedMap[o.id] || 0;
       const totalAllocated = totalOrderAllocatedMap[o.id] || 0;
@@ -548,7 +745,8 @@ export const ScheduleCreation: React.FC = () => {
         id: o.id,
         orderNumber: o.orderNumber || 'N/A',
         productName: o.productName || 'N/A',
-        category: catName,
+        category: groupLabel,
+        group: groupLabel,
         targetVolume: targetQty,
         allocatedQuantity: totalAllocated,
         currentlySimAllocation: simAllocated,
@@ -559,14 +757,14 @@ export const ScheduleCreation: React.FC = () => {
         actions: 'ACTIONS'
       };
     });
-  }, [pendingOrders, categoryMap, tentativeOrderAllocatedMap, totalOrderAllocatedMap, existingPlans]);
+  }, [pendingOrders, isToyo, sectionMap, categoryMap, existingPlans, machines, tentativeOrderAllocatedMap, totalOrderAllocatedMap]);
 
   // ----------------------------------------------------
   // FEASIBILITY & CLASH DETECTION ENGINE
   // ----------------------------------------------------
   const feasibilityAnalysis = useMemo(() => {
     const clashes: Array<{
-      type: 'CAPACITY_OVERLOAD' | 'HOLIDAY_OVERLAP' | 'DUE_DATE_BREACH' | 'MACHINE_INACTIVE';
+      type: 'CAPACITY_OVERLOAD' | 'HOLIDAY_OVERLAP' | 'DOWNTIME_CLASH' | 'DUE_DATE_BREACH' | 'MACHINE_INACTIVE';
       severity: 'ERROR' | 'WARNING';
       title: string;
       description: string;
@@ -580,18 +778,14 @@ export const ScheduleCreation: React.FC = () => {
 
     activeMachines.forEach(machine => {
       timelineDates.forEach(({ dateStr }) => {
-        const holiday = holidayMap[dateStr];
-        const downtimeMins = Number(downtimeMap[`${machine.id}_${dateStr}`]) || 0;
-        const { opHours, dailyCap } = getMachineCapacityOnDate(machine, dateStr);
-        
-        let effectiveCapacity = dailyCap;
-        if (holiday) {
-          effectiveCapacity = 0;
-        } else if (downtimeMins > 0) {
-          const lostHours = downtimeMins / 60;
-          const availableHours = Math.max(0, opHours - lostHours);
-          effectiveCapacity = Math.round((availableHours / opHours) * dailyCap);
-        }
+        const status = getMachineSlotStatus(machine, dateStr);
+        const {
+          effectiveCapacity,
+          isHoliday,
+          holiday,
+          isScheduledDowntime,
+          downtimeReason
+        } = status;
 
         totalCapacityAcrossWindow += (Number.isFinite(effectiveCapacity) ? effectiveCapacity : 0);
 
@@ -605,25 +799,37 @@ export const ScheduleCreation: React.FC = () => {
         totalAllocatedVol += tentativeVol;
 
         // 1. Holiday Clash Check
-        if (holiday && tentativeVol > 0) {
+        if (isHoliday && tentativeVol > 0) {
           clashes.push({
             type: 'HOLIDAY_OVERLAP',
             severity: 'ERROR',
             title: `Holiday Overlap on ${machine.machineCode}`,
-            description: `${tentativeVol.toLocaleString()} units scheduled on ${dateStr} which is marked as holiday "${holiday.name}".`,
+            description: `${tentativeVol.toLocaleString()} units scheduled on ${dateStr} which is marked as holiday "${holiday?.name}".`,
             machineCode: machine.machineCode,
             dateStr
           });
         }
 
-        // 2. Capacity Overload Clash Check
-        if (totalUsed > effectiveCapacity && effectiveCapacity >= 0) {
+        // 2. Scheduled Downtime Clash Check (Riley's & Toyo)
+        if (isScheduledDowntime && tentativeVol > 0) {
+          clashes.push({
+            type: 'DOWNTIME_CLASH',
+            severity: 'ERROR',
+            title: `Scheduled Downtime Clash on ${machine.machineCode}`,
+            description: `${tentativeVol.toLocaleString()} units scheduled on ${dateStr} which has scheduled downtime ("${downtimeReason}"). Jobs cannot be scheduled on this day.`,
+            machineCode: machine.machineCode,
+            dateStr
+          });
+        }
+
+        // 3. Capacity Overload Clash Check (Uses updated daily capacity from Toyo Machine Master)
+        if (!isHoliday && !isScheduledDowntime && totalUsed > effectiveCapacity && effectiveCapacity > 0) {
           const over = totalUsed - effectiveCapacity;
           clashes.push({
             type: 'CAPACITY_OVERLOAD',
             severity: 'ERROR',
             title: `Capacity Exceeded on ${machine.machineCode}`,
-            description: `Total allocated (${totalUsed.toLocaleString()} u) exceeds daily capacity (${effectiveCapacity.toLocaleString()} u) by ${over.toLocaleString()} units on ${dateStr}.`,
+            description: `Total allocated (${totalUsed.toLocaleString()} u) exceeds updated daily capacity (${effectiveCapacity.toLocaleString()} u) by ${over.toLocaleString()} units on ${dateStr}.`,
             machineCode: machine.machineCode,
             dateStr
           });
@@ -746,17 +952,26 @@ export const ScheduleCreation: React.FC = () => {
     let remainingToPlan = unallocated;
 
     if (mode === 'EVEN') {
-      const totalSlots = Math.max(1, targetMachines.length * dates.length);
+      const eligibleSlots: { m: Machine; d: { dateStr: string } }[] = [];
+      targetMachines.forEach(m => {
+        dates.forEach(d => {
+          const status = getMachineSlotStatus(m, d.dateStr);
+          if (status.canSchedule) {
+            eligibleSlots.push({ m, d });
+          } else {
+            newVolumes[`${m.id}_${d.dateStr}`] = 0;
+          }
+        });
+      });
+      const totalSlots = Math.max(1, eligibleSlots.length);
       const evenVol = Math.floor(unallocated / totalSlots);
       let remainderAcc = unallocated % totalSlots;
 
-      targetMachines.forEach(m => {
-        dates.forEach(d => {
-          const key = `${m.id}_${d.dateStr}`;
-          const extra = remainderAcc > 0 ? 1 : 0;
-          if (remainderAcc > 0) remainderAcc--;
-          newVolumes[key] = Math.max(0, evenVol + extra);
-        });
+      eligibleSlots.forEach(({ m, d }) => {
+        const key = `${m.id}_${d.dateStr}`;
+        const extra = remainderAcc > 0 ? 1 : 0;
+        if (remainderAcc > 0) remainderAcc--;
+        newVolumes[key] = Math.max(0, evenVol + extra);
       });
       setRangeDailyVolumes(newVolumes);
       return;
@@ -766,18 +981,16 @@ export const ScheduleCreation: React.FC = () => {
       targetMachines.forEach(m => {
         dates.forEach(d => {
           const key = `${m.id}_${d.dateStr}`;
-          const downtimeMins = Number(downtimeMap[`${m.id}_${d.dateStr}`]) || 0;
-          const { opHours, dailyCap } = getMachineCapacityOnDate(m, d.dateStr);
-          let effectiveCap = dailyCap;
-          if (downtimeMins > 0) {
-            const lost = downtimeMins / 60;
-            effectiveCap = Math.round((Math.max(0, opHours - lost) / opHours) * dailyCap);
+          const status = getMachineSlotStatus(m, d.dateStr);
+          if (!status.canSchedule) {
+            newVolumes[key] = 0;
+            return;
           }
-          const existing = Number(existingPlanVolumeMap[`${m.id}_${d.dateStr}`]) || 0;
+          const existing = Number(existingPlanVolumeMap[key]) || 0;
           const tentative = tentativeAllocations
             .filter(a => a.machineId === m.id && a.dateStr === d.dateStr)
             .reduce((s, a) => s + (Number(a.allocatedVolume) || 0), 0);
-          const avail = Math.max(0, effectiveCap - (existing + tentative));
+          const avail = Math.max(0, status.effectiveCapacity - (existing + tentative));
           newVolumes[key] = avail;
         });
       });
@@ -793,18 +1006,16 @@ export const ScheduleCreation: React.FC = () => {
         if (remainingToPlan <= 0) break;
 
         const key = `${m.id}_${d.dateStr}`;
-        const downtimeMins = Number(downtimeMap[`${m.id}_${d.dateStr}`]) || 0;
-        const { opHours, dailyCap } = getMachineCapacityOnDate(m, d.dateStr);
-        let effectiveCap = dailyCap;
-        if (downtimeMins > 0) {
-          const lost = downtimeMins / 60;
-          effectiveCap = Math.round((Math.max(0, opHours - lost) / opHours) * dailyCap);
+        const status = getMachineSlotStatus(m, d.dateStr);
+        if (!status.canSchedule) {
+          newVolumes[key] = 0;
+          continue;
         }
-        const existing = Number(existingPlanVolumeMap[`${m.id}_${d.dateStr}`]) || 0;
+        const existing = Number(existingPlanVolumeMap[key]) || 0;
         const tentative = tentativeAllocations
           .filter(a => a.machineId === m.id && a.dateStr === d.dateStr)
           .reduce((s, a) => s + (Number(a.allocatedVolume) || 0), 0);
-        const avail = Math.max(0, effectiveCap - (existing + tentative));
+        const avail = Math.max(0, status.effectiveCapacity - (existing + tentative));
 
         if (avail > 0) {
           const chunk = Math.min(remainingToPlan, avail);
@@ -842,6 +1053,9 @@ export const ScheduleCreation: React.FC = () => {
       const machineObj = machines.find(m => m.id === machineId);
       if (!machineObj) continue;
 
+      const status = getMachineSlotStatus(machineObj, dateStr);
+      if (!status.canSchedule) continue; // Safety guard: ignore any downtime/holiday dates
+
       newAllocs.push({
         id: `range_${Date.now()}_${Math.floor(Math.random() * 100000)}_${key}`,
         orderId: rangePlanOrder.id,
@@ -878,28 +1092,23 @@ export const ScheduleCreation: React.FC = () => {
   // ----------------------------------------------------
   // Quick Slot Allocator Opener
   const handleOpenSlotModal = (machine: Machine, dateStr: string) => {
-    const holiday = holidayMap[dateStr];
-    if (holiday) {
-      showToast(`Cannot allocate on ${dateStr}: Factory Holiday (${holiday.name})`, 'warning');
+    const status = getMachineSlotStatus(machine, dateStr);
+    if (status.isHoliday) {
+      showToast(`Cannot allocate on ${dateStr}: Factory Holiday (${status.holiday?.name || 'Closed'})`, 'warning');
+      return;
+    }
+    if (status.isScheduledDowntime) {
+      showToast(`Cannot schedule job on ${dateStr}: Machine ${machine.machineCode} has scheduled downtime (${status.downtimeReason}).`, 'warning');
       return;
     }
 
-    const downtimeMins = Number(downtimeMap[`${machine.id}_${dateStr}`]) || 0;
-    const { opHours, dailyCap } = getMachineCapacityOnDate(machine, dateStr);
-
-    let effectiveCap = dailyCap;
-    if (downtimeMins > 0) {
-      const lostHours = downtimeMins / 60;
-      const availableHours = Math.max(0, opHours - lostHours);
-      effectiveCap = Math.round((availableHours / opHours) * dailyCap);
-    }
-
+    const { effectiveCapacity, dailyCapacity, baseDailyCapacity, isCapacityUpdated } = status;
     const existingVol = Number(existingPlanVolumeMap[`${machine.id}_${dateStr}`]) || 0;
     const existingTentative = tentativeAllocations.filter(
       a => a.machineId === machine.id && a.dateStr === dateStr
     );
     const tentativeVol = existingTentative.reduce((sum, a) => sum + (Number(a.allocatedVolume) || 0), 0);
-    const availableCap = Math.max(0, effectiveCap - (existingVol + tentativeVol));
+    const availableCap = Math.max(0, effectiveCapacity - (existingVol + tentativeVol));
 
     const defaultOrder = (selectedOrderToAllocate && (orderRemainingMap[selectedOrderToAllocate.id] || 0) > 0)
       ? selectedOrderToAllocate
@@ -924,7 +1133,10 @@ export const ScheduleCreation: React.FC = () => {
       dateStr,
       existingAllocations: existingTentative,
       availableCap,
-      effectiveCap
+      effectiveCap: effectiveCapacity,
+      dailyCapacity,
+      baseDailyCapacity,
+      isCapacityUpdated
     });
   };
 
@@ -934,6 +1146,12 @@ export const ScheduleCreation: React.FC = () => {
     const vol = Number(slotForm.volume);
     if (!slotModal.machine || !slotForm.orderId || !Number.isFinite(vol) || vol <= 0) {
       showToast('Please select an order and enter a valid positive volume number.', 'warning');
+      return;
+    }
+
+    const status = getMachineSlotStatus(slotModal.machine, slotModal.dateStr);
+    if (!status.canSchedule) {
+      showToast(`Cannot allocate on ${slotModal.dateStr}: ${status.blockReason}`, 'error');
       return;
     }
 
@@ -1037,6 +1255,20 @@ export const ScheduleCreation: React.FC = () => {
     mutationFn: async () => {
       if (tentativeAllocations.length === 0) {
         throw new Error('No tentative allocations to create.');
+      }
+
+      // Safety Guard: strictly block confirmation if any allocation falls on scheduled downtime or holiday
+      for (const a of tentativeAllocations) {
+        const m = machines.find(mach => mach.id === a.machineId);
+        if (m) {
+          const status = getMachineSlotStatus(m, a.dateStr);
+          if (status.isScheduledDowntime) {
+            throw new Error(`Cannot confirm schedule: Machine ${m.machineCode} has scheduled downtime on ${a.dateStr} (${status.downtimeReason}).`);
+          }
+          if (status.isHoliday) {
+            throw new Error(`Cannot confirm schedule: ${a.dateStr} is a factory holiday (${status.holiday?.name || 'Closed'}).`);
+          }
+        }
       }
 
       const planGroups: Record<string, TentativeAllocation[]> = {};
@@ -1314,7 +1546,7 @@ export const ScheduleCreation: React.FC = () => {
                   '#',
                   'Order Number',
                   'Product Name',
-                  'Category',
+                  isToyo ? 'Section' : 'Category',
                   'Target Volume',
                   'Allocated Volume',
                   'Currently Sim Allocation',
@@ -1490,19 +1722,31 @@ export const ScheduleCreation: React.FC = () => {
 
             {/* Horizon & Navigation Controls */}
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-              {/* Category Filter */}
-              <FormControl size="small" sx={{ width: 170 }}>
-                <InputLabel>Category</InputLabel>
+              {/* Section (Toyo) or Category (Riley's) Filter */}
+              <FormControl size="small" sx={{ width: 180 }}>
+                <InputLabel>{isToyo ? 'Section' : 'Category'}</InputLabel>
                 <Select
-                  label="Category"
-                  value={selectedCategoryId}
-                  onChange={(e) => setSelectedCategoryId(e.target.value)}
+                  label={isToyo ? 'Section' : 'Category'}
+                  value={selectedGroupFilter}
+                  onChange={(e) => setSelectedGroupFilter(e.target.value)}
                 >
-                  <MenuItem value="all">All Categories ({categories.length})</MenuItem>
-                  {categories.map(c => (
-                    <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                  ))}
-                  <MenuItem value="uncategorized">General / Uncategorized</MenuItem>
+                  <MenuItem value="all">
+                    {isToyo ? `All Sections (${sections.length})` : `All Categories (${categories.length})`}
+                  </MenuItem>
+                  {isToyo ? (
+                    sections.map(s => (
+                      <MenuItem key={s.id} value={s.id}>
+                        {s.sectionCode ? `${s.sectionCode} - ` : ''}{s.sectionName}
+                      </MenuItem>
+                    ))
+                  ) : (
+                    categories.map(c => (
+                      <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                    ))
+                  )}
+                  <MenuItem value={isToyo ? 'unassigned' : 'uncategorized'}>
+                    {isToyo ? 'General / Unassigned' : 'General / Uncategorized'}
+                  </MenuItem>
                 </Select>
               </FormControl>
 
@@ -1649,16 +1893,16 @@ export const ScheduleCreation: React.FC = () => {
                 })}
               </Box>
 
-              {/* Machine Rows Grouped by Category */}
+              {/* Machine Rows Grouped by Section (Toyo) or Category (Riley's) */}
               {groupedMachinesByCategory.length > 0 ? (
                 groupedMachinesByCategory.map(group => (
-                  <React.Fragment key={group.categoryId}>
-                    {/* Category Group Header Row */}
+                  <React.Fragment key={group.groupId}>
+                    {/* Section / Category Group Header Row */}
                     <Box
                       sx={{
                         display: 'flex',
-                        bgcolor: 'rgba(99, 102, 241, 0.06)',
-                        borderLeft: '4px solid #4f46e5',
+                        bgcolor: isToyo ? 'rgba(2, 132, 199, 0.06)' : 'rgba(99, 102, 241, 0.06)',
+                        borderLeft: `4px solid ${isToyo ? '#0284c7' : '#4f46e5'}`,
                         borderTop: '2px solid #cbd5e1',
                         borderBottom: '1px solid #cbd5e1',
                         py: 1.2,
@@ -1668,18 +1912,28 @@ export const ScheduleCreation: React.FC = () => {
                       }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <CategoryIcon sx={{ color: '#4f46e5', fontSize: 18 }} />
-                        <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1e1b4b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                          Category: {group.categoryName}
+                        {isToyo ? (
+                          <LayersIcon sx={{ color: '#0284c7', fontSize: 18 }} />
+                        ) : (
+                          <CategoryIcon sx={{ color: '#4f46e5', fontSize: 18 }} />
+                        )}
+                        <Typography variant="subtitle2" sx={{ fontWeight: 800, color: isToyo ? '#0369a1' : '#1e1b4b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          {isToyo ? 'Section' : 'Category'}: {group.groupName} {group.groupCode ? `(${group.groupCode})` : ''}
                         </Typography>
                         <Chip
                           label={`${group.machines.length} ${group.machines.length === 1 ? 'Line' : 'Lines'}`}
                           size="small"
-                          sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700, bgcolor: '#e0e7ff', color: '#3730a3' }}
+                          sx={{
+                            height: 20,
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            bgcolor: isToyo ? '#e0f2fe' : '#e0e7ff',
+                            color: isToyo ? '#0369a1' : '#3730a3'
+                          }}
                         />
                       </Box>
                       <Typography variant="caption" sx={{ color: '#475569', fontWeight: 700 }}>
-                        Category Daily Capacity: <strong>{group.totalDailyCapacity.toLocaleString()} Units/Day</strong>
+                        {isToyo ? 'Section' : 'Category'} Daily Capacity: <strong>{group.totalDailyCapacity.toLocaleString()} Units/Day</strong>
                       </Typography>
                     </Box>
 
@@ -1688,7 +1942,9 @@ export const ScheduleCreation: React.FC = () => {
                       const plantName = plantMap[machine.plantId] || 'Main Plant';
                       const opHours = Number(machine.operatingHours) || 24;
                       const dailyCap = Number(machine.dailyCapacity) || 1000;
-                      const catName = categoryMap[machine.categoryId || ''] || group.categoryName;
+                      const groupBadge = isToyo
+                        ? (machine.sectionName || sectionMap[machine.sectionId || '']?.sectionName || group.groupName)
+                        : (categoryMap[machine.categoryId || ''] || group.groupName);
 
                       return (
                         <Box
@@ -1713,11 +1969,11 @@ export const ScheduleCreation: React.FC = () => {
                             }}
                           >
                             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.3 }}>
-                              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#4f46e5' }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: isToyo ? '#0284c7' : '#4f46e5' }}>
                                 {machine.machineCode}
                               </Typography>
                               <Chip
-                                label={catName}
+                                label={groupBadge}
                                 size="small"
                                 sx={{ height: 18, fontSize: '0.62rem', fontWeight: 700, bgcolor: '#f1f5f9', color: '#475569' }}
                               />
@@ -1741,20 +1997,21 @@ export const ScheduleCreation: React.FC = () => {
 
                           {/* Date Cells */}
                           {timelineDates.map(({ dateStr }) => {
-                            const holiday = holidayMap[dateStr];
-                            const downtimeMins = Number(downtimeMap[`${machine.id}_${dateStr}`]) || 0;
+                            const slotStatus = getMachineSlotStatus(machine, dateStr);
+                            const {
+                              isHoliday,
+                              isScheduledDowntime,
+                              downtimeReason,
+                              dailyCapacity: dayDailyCapacity,
+                              baseDailyCapacity,
+                              isCapacityUpdated,
+                              effectiveCapacity
+                            } = slotStatus;
 
-                            let effectiveCap = dailyCap;
-                            if (holiday) {
-                              effectiveCap = 0;
-                            } else if (downtimeMins > 0) {
-                              const lostHours = downtimeMins / 60;
-                              const availableHours = Math.max(0, opHours - lostHours);
-                              effectiveCap = Math.round((availableHours / opHours) * dailyCap);
-                            }
+                            const effectiveCap = effectiveCapacity;
 
-                            // Existing plans active on this machine & date (strictly 0 on holidays)
-                            const plansOnDate = holiday ? [] : existingPlans.filter(p => {
+                            // Existing plans active on this machine & date (strictly 0 on holidays or scheduled downtime)
+                            const plansOnDate = (isHoliday || isScheduledDowntime) ? [] : existingPlans.filter(p => {
                               if (p.status === 'CANCELLED' || p.machineId !== machine.id) return false;
                               const pStart = toLocalDateString(p.startDate);
                               const pEnd = toLocalDateString(p.endDate);
@@ -1781,8 +2038,9 @@ export const ScheduleCreation: React.FC = () => {
                             const tentativeVol = slotTentativeAllocations.reduce((sum, a) => sum + (Number(a.allocatedVolume) || 0), 0);
                             const totalUsed = existingVol + tentativeVol;
                             const availableRemaining = Math.max(0, effectiveCap - totalUsed);
-                            const isOverloaded = totalUsed > effectiveCap;
-                            const isHolidayClash = holiday && tentativeVol > 0;
+                            const isOverloaded = !isHoliday && !isScheduledDowntime && totalUsed > effectiveCap;
+                            const isHolidayClash = isHoliday && tentativeVol > 0;
+                            const isDowntimeClash = isScheduledDowntime && tentativeVol > 0;
                             const utilizationRatio = effectiveCap > 0 ? (totalUsed / effectiveCap) : (totalUsed > 0 ? 1.5 : 0);
 
                             return (
@@ -1793,13 +2051,16 @@ export const ScheduleCreation: React.FC = () => {
                                   minWidth: 140,
                                   p: 1,
                                   borderRight: '1px solid #e2e8f0',
-                                  bgcolor: isOverloaded || isHolidayClash
+                                  bgcolor: (isOverloaded || isHolidayClash || isDowntimeClash)
                                     ? '#fee2e2'
-                                    : holiday
+                                    : isScheduledDowntime
+                                    ? '#fff1f2'
+                                    : isHoliday
                                     ? '#f8fafc'
                                     : utilizationRatio > 0.85
                                     ? '#fffbeb'
                                     : '#ffffff',
+                                  borderLeft: isScheduledDowntime ? '3px solid #f43f5e' : undefined,
                                   display: 'flex',
                                   flexDirection: 'column',
                                   justifyContent: 'space-between',
@@ -1808,10 +2069,30 @@ export const ScheduleCreation: React.FC = () => {
                               >
                                 {/* Cell Header: Capacity status badge */}
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.8, gap: 0.5, flexWrap: 'wrap' }}>
-                                  {holiday ? (
+                                  {isHoliday ? (
                                     <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 800, color: '#94a3b8' }}>
                                       Closed (Holiday)
                                     </Typography>
+                                  ) : isScheduledDowntime ? (
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.2 }}>
+                                      <Chip
+                                        icon={<BuildIcon sx={{ fontSize: '11px !important', color: '#be123c !important' }} />}
+                                        label={downtimeReason || 'Scheduled Downtime'}
+                                        size="small"
+                                        sx={{
+                                          height: 20,
+                                          fontSize: '0.62rem',
+                                          fontWeight: 800,
+                                          bgcolor: '#ffe4e6',
+                                          color: '#9f1239',
+                                          border: '1px solid #fecdd3',
+                                          maxWidth: 130
+                                        }}
+                                      />
+                                      <Typography variant="caption" sx={{ fontSize: '0.62rem', color: '#be123c', fontWeight: 700 }}>
+                                        0 u free (Line Down)
+                                      </Typography>
+                                    </Box>
                                   ) : (
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
                                       <Typography
@@ -1826,20 +2107,26 @@ export const ScheduleCreation: React.FC = () => {
                                           ? `+${(totalUsed - effectiveCap).toLocaleString()} u CLASH`
                                           : `${availableRemaining.toLocaleString()} u free`}
                                       </Typography>
-                                      {downtimeMins > 0 && (
-                                        <Tooltip title={`Recorded Maintenance/Downtime: ${Math.round(downtimeMins / 60 * 10) / 10} hrs (${downtimeMins} mins)`}>
+                                      {isCapacityUpdated && (
+                                        <Tooltip title={`Daily Capacity for ${dateStr} updated from standard ${baseDailyCapacity.toLocaleString()} u to ${dayDailyCapacity.toLocaleString()} u/day in Toyo Machine Master`}>
                                           <Chip
-                                            icon={<BuildIcon sx={{ fontSize: '11px !important', color: '#b45309 !important' }} />}
-                                            label={`${Math.round(downtimeMins / 60)}h Maint`}
                                             size="small"
-                                            sx={{ height: 18, fontSize: '0.62rem', fontWeight: 700, bgcolor: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }}
+                                            label={`${dayDailyCapacity.toLocaleString()} u`}
+                                            sx={{
+                                              height: 18,
+                                              fontSize: '0.62rem',
+                                              fontWeight: 800,
+                                              bgcolor: '#e0f2fe',
+                                              color: '#0369a1',
+                                              border: '1px solid #bae6fd'
+                                            }}
                                           />
                                         </Tooltip>
                                       )}
                                     </Box>
                                   )}
 
-                                  {!holiday && (
+                                  {!isHoliday && !isScheduledDowntime ? (
                                     <IconButton
                                       size="small"
                                       onClick={() => handleOpenSlotModal(machine, dateStr)}
@@ -1855,11 +2142,30 @@ export const ScheduleCreation: React.FC = () => {
                                     >
                                       <AddIcon sx={{ fontSize: 14 }} />
                                     </IconButton>
-                                  )}
+                                  ) : isScheduledDowntime ? (
+                                    <Tooltip title={`Machine has scheduled downtime on ${dateStr} (${downtimeReason}). Cannot schedule or add jobs on this day.`}>
+                                      <span>
+                                        <IconButton
+                                          size="small"
+                                          disabled
+                                          sx={{
+                                            width: 22,
+                                            height: 22,
+                                            bgcolor: '#fee2e2',
+                                            color: '#ef4444',
+                                            border: '1px solid #fca5a5',
+                                            opacity: 0.85
+                                          }}
+                                        >
+                                          <BlockIcon sx={{ fontSize: 13, color: '#ef4444' }} />
+                                        </IconButton>
+                                      </span>
+                                    </Tooltip>
+                                  ) : null}
                                 </Box>
 
                                 {/* Capacity Visual Progress Bar */}
-                                {!holiday && effectiveCap > 0 && (
+                                {!isHoliday && !isScheduledDowntime && effectiveCap > 0 && (
                                   <Box sx={{ mb: 1 }}>
                                     <LinearProgress
                                       variant="determinate"
@@ -1983,10 +2289,10 @@ export const ScheduleCreation: React.FC = () => {
                                 </Stack>
 
                                 {/* Downtime Warning */}
-                                {downtimeMins > 0 && !holiday && (
-                                  <Box sx={{ mt: 0.5, p: 0.4, borderRadius: '4px', bgcolor: '#fffbeb', border: '1px solid #fde68a', color: '#b45309', fontSize: '0.65rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <BuildIcon sx={{ fontSize: 12, color: '#b45309' }} />
-                                    {downtimeMins}m Maint
+                                {isScheduledDowntime && (
+                                  <Box sx={{ mt: 0.5, p: 0.4, borderRadius: '4px', bgcolor: '#ffe4e6', border: '1px solid #fecdd3', color: '#9f1239', fontSize: '0.65rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <BlockIcon sx={{ fontSize: 12, color: '#e11d48' }} />
+                                    {downtimeReason || 'Scheduled Downtime'}
                                   </Box>
                                 )}
                               </Box>
@@ -2087,8 +2393,8 @@ export const ScheduleCreation: React.FC = () => {
                     <MenuItem key={m.id} value={m.id}>
                       <Checkbox checked={rangeSelectedMachineIds.indexOf(m.id) > -1} size="small" />
                       <ListItemText
-                        primary={`${m.machineCode} - ${m.machineName} (${categoryMap[m.categoryId || ''] || 'General'})`}
-                        secondary={`Category: ${categoryMap[m.categoryId || ''] || 'General'} • Daily Cap: ${(Number(m.dailyCapacity) || 1000).toLocaleString()} u/day`}
+                        primary={`${m.machineCode} - ${m.machineName} (${isToyo ? (m.sectionName || sectionMap[m.sectionId || '']?.sectionName || 'General') : (categoryMap[m.categoryId || ''] || 'General')})`}
+                        secondary={`${isToyo ? 'Section' : 'Category'}: ${isToyo ? (m.sectionName || sectionMap[m.sectionId || '']?.sectionName || 'General') : (categoryMap[m.categoryId || ''] || 'General')} • Daily Cap: ${(Number(m.dailyCapacity) || 1000).toLocaleString()} u/day`}
                       />
                     </MenuItem>
                   ))}
@@ -2221,46 +2527,69 @@ export const ScheduleCreation: React.FC = () => {
                     const targetMachines = activeMachines.filter(m => rangeSelectedMachineIds.includes(m.id));
                     return targetMachines.map(m => {
                       const key = `${m.id}_${d.dateStr}`;
-                      const downtimeMins = Number(downtimeMap[key]) || 0;
-                      const { opHours, dailyCap } = getMachineCapacityOnDate(m, d.dateStr);
-                      let effectiveCap = dailyCap;
-                      if (downtimeMins > 0) {
-                        const lost = downtimeMins / 60;
-                        effectiveCap = Math.round((Math.max(0, opHours - lost) / opHours) * dailyCap);
+                      const status = getMachineSlotStatus(m, d.dateStr);
+                      const {
+                        isScheduledDowntime,
+                        downtimeReason,
+                        dailyCapacity: dayDailyCapacity,
+                        baseDailyCapacity,
+                        isCapacityUpdated,
+                        effectiveCapacity
+                      } = status;
+
+                      if (isScheduledDowntime) {
+                        return (
+                          <TableRow key={key} sx={{ bgcolor: '#fff1f2' }}>
+                            <TableCell sx={{ fontWeight: 700, color: '#9f1239' }}>
+                              {d.dateStr} ({d.dayName})
+                            </TableCell>
+                            <TableCell sx={{ fontWeight: 600, color: '#9f1239' }}>
+                              {m.machineCode}
+                            </TableCell>
+                            <TableCell align="right" sx={{ color: '#9f1239', fontWeight: 600 }}>
+                              0 u (Downtime)
+                            </TableCell>
+                            <TableCell align="right">
+                              <Chip
+                                icon={<BuildIcon sx={{ fontSize: '13px !important', color: '#9f1239 !important' }} />}
+                                label={downtimeReason || 'Scheduled Downtime'}
+                                size="small"
+                                sx={{ height: 22, bgcolor: '#ffe4e6', color: '#9f1239', fontWeight: 700, border: '1px solid #fecdd3' }}
+                              />
+                            </TableCell>
+                            <TableCell align="center">
+                              <Chip
+                                icon={<BlockIcon sx={{ fontSize: '12px !important', color: '#9f1239 !important' }} />}
+                                label="Locked (Downtime)"
+                                size="small"
+                                sx={{ height: 22, bgcolor: '#fee2e2', color: '#9f1239', fontWeight: 700 }}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
                       }
+
                       const existing = Number(existingPlanVolumeMap[key]) || 0;
                       const tentative = tentativeAllocations
                         .filter(a => a.machineId === m.id && a.dateStr === d.dateStr)
                         .reduce((s, a) => s + (Number(a.allocatedVolume) || 0), 0);
-                      const availableHeadroom = Math.max(0, effectiveCap - (existing + tentative));
+                      const availableHeadroom = Math.max(0, effectiveCapacity - (existing + tentative));
                       const curVal = rangeDailyVolumes[key] ?? 0;
                       const isExceeding = Number(curVal) > availableHeadroom;
 
                       return (
-                        <TableRow key={key} hover sx={{ bgcolor: downtimeMins > 0 ? '#fffdfa' : 'inherit' }}>
+                        <TableRow key={key} hover>
                           <TableCell sx={{ fontWeight: 700 }}>
                             {d.dateStr} ({d.dayName})
                           </TableCell>
                           <TableCell sx={{ fontWeight: 600, color: '#4338ca' }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
-                              {m.machineCode}
-                              {downtimeMins > 0 && (
-                                <Tooltip title={`Downtime recorded: ${Math.round(downtimeMins / 60 * 10) / 10} hrs (${downtimeMins} mins)`}>
-                                  <Chip
-                                    icon={<BuildIcon sx={{ fontSize: '11px !important', color: '#b45309 !important' }} />}
-                                    label={`${Math.round(downtimeMins / 60)}h Maint`}
-                                    size="small"
-                                    sx={{ height: 18, fontSize: '0.62rem', fontWeight: 700, bgcolor: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }}
-                                  />
-                                </Tooltip>
-                              )}
-                            </Box>
+                            {m.machineCode}
                           </TableCell>
                           <TableCell align="right" sx={{ color: '#64748b' }}>
-                            {effectiveCap.toLocaleString()} u
-                            {downtimeMins > 0 && (
-                              <Typography variant="caption" sx={{ color: '#b45309', display: 'block', fontSize: '0.62rem' }}>
-                                (Lost {dailyCap - effectiveCap} u)
+                            {dayDailyCapacity.toLocaleString()} u
+                            {isCapacityUpdated && (
+                              <Typography variant="caption" sx={{ color: '#0284c7', display: 'block', fontSize: '0.62rem', fontWeight: 700 }}>
+                                (Updated from {baseDailyCapacity.toLocaleString()} u)
                               </Typography>
                             )}
                           </TableCell>
@@ -2272,7 +2601,7 @@ export const ScheduleCreation: React.FC = () => {
                               size="small"
                               type="number"
                               value={curVal}
-                              disabled={effectiveCap <= 0}
+                              disabled={effectiveCapacity <= 0}
                               onChange={(e) => {
                                 const v = e.target.value === '' ? '' : Math.max(0, Number(e.target.value));
                                 setRangeDailyVolumes(prev => ({ ...prev, [key]: isNaN(v as number) ? 0 : v }));
@@ -2383,11 +2712,18 @@ export const ScheduleCreation: React.FC = () => {
                 <Typography variant="caption" sx={{ color: '#16a34a', fontWeight: 700, display: 'block', mt: 0.5 }}>
                   Available Remaining Capacity: {slotModal.availableCap.toLocaleString()} Units
                 </Typography>
+                {slotModal.isCapacityUpdated && (
+                  <Chip
+                    size="small"
+                    label={`Day Capacity Updated in Toyo Master: ${slotModal.dailyCapacity?.toLocaleString()} u (Base: ${slotModal.baseDailyCapacity?.toLocaleString()} u)`}
+                    sx={{ mt: 0.8, height: 22, fontSize: '0.7rem', fontWeight: 700, bgcolor: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' }}
+                  />
+                )}
               </Box>
 
-              {slotModal.machine && downtimeMap[`${slotModal.machine.id}_${slotModal.dateStr}`] > 0 && (
-                <Alert severity="warning" icon={<BuildIcon sx={{ fontSize: 18 }} />} sx={{ py: 0.5, fontSize: '0.75rem' }}>
-                  Machine has {Math.round(downtimeMap[`${slotModal.machine.id}_${slotModal.dateStr}`] / 60 * 10) / 10} hrs recorded downtime on this date. Effective capacity is reduced to {slotModal.effectiveCap.toLocaleString()} u.
+              {slotModal.machine && getMachineSlotStatus(slotModal.machine, slotModal.dateStr).isScheduledDowntime && (
+                <Alert severity="error" icon={<BlockIcon sx={{ fontSize: 18 }} />} sx={{ py: 0.5, fontSize: '0.75rem' }}>
+                  Machine has scheduled downtime on this date ({getMachineSlotStatus(slotModal.machine, slotModal.dateStr).downtimeReason}). Scheduling is blocked.
                 </Alert>
               )}
 

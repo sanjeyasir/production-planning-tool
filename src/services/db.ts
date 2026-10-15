@@ -115,6 +115,8 @@ export interface Machine {
   tenantId: string;
   plantId: string;
   categoryId?: string; // Associated production category ID
+  sectionId?: string; // Associated Toyo section ID
+  sectionName?: string; // Associated Toyo section name
   machineCode: string;
   machineName: string;
   capacity?: number; // legacy hourly speed in units/hr
@@ -132,6 +134,8 @@ export const getMachines = async (tenantId: string): Promise<Machine[]> => {
     return {
       ...m,
       categoryId: m.categoryId || '',
+      sectionId: m.sectionId || '',
+      sectionName: m.sectionName || '',
       operatingHours: opHours,
       dailyCapacity: dailyCap,
       capacity: Math.round(dailyCap / opHours)
@@ -150,6 +154,8 @@ export const createMachine = async (data: Omit<Machine, 'id' | 'createdAt'>) => 
   const docRef = await addDoc(colRef, {
     ...data,
     categoryId: data.categoryId || '',
+    sectionId: data.sectionId || '',
+    sectionName: data.sectionName || '',
     operatingHours,
     dailyCapacity,
     capacity,
@@ -178,6 +184,12 @@ export const updateMachine = async (id: string, data: Partial<Omit<Machine, 'id'
   }
   if (data.categoryId !== undefined) {
     updateData.categoryId = data.categoryId;
+  }
+  if (data.sectionId !== undefined) {
+    updateData.sectionId = data.sectionId;
+  }
+  if (data.sectionName !== undefined) {
+    updateData.sectionName = data.sectionName;
   }
   
   await updateDoc(docRef, updateData);
@@ -330,6 +342,62 @@ export const updateDowntimeCategory = async (id: string, data: Partial<Omit<Down
 export const deleteDowntimeCategory = async (id: string) => {
   const docRef = doc(db, 'downtime_categories', id);
   await deleteDoc(docRef);
+};
+
+// ----------------------------------------------------
+// SECTIONS (Toyo Section Master)
+// ----------------------------------------------------
+export interface Section {
+  id: string;
+  tenantId: string; // 'toyo'
+  sectionCode: string;
+  sectionName: string;
+  description?: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  createdAt: Date;
+}
+
+export const getSections = async (tenantId: string = 'toyo'): Promise<Section[]> => {
+  return listTenantCollection<Section>('sections', tenantId);
+};
+
+export const createSection = async (data: Omit<Section, 'id' | 'createdAt'>) => {
+  const colRef = collection(db, 'sections');
+  const docRef = await addDoc(colRef, {
+    tenantId: data.tenantId || 'toyo',
+    sectionCode: data.sectionCode ? data.sectionCode.trim().toUpperCase() : '',
+    sectionName: data.sectionName.trim(),
+    description: data.description ? data.description.trim() : '',
+    status: data.status || 'ACTIVE',
+    createdAt: new Date()
+  });
+  return docRef.id;
+};
+
+export const updateSection = async (id: string, data: Partial<Omit<Section, 'id' | 'createdAt'>>) => {
+  const docRef = doc(db, 'sections', id);
+  const updateData: any = { ...data };
+  if (data.sectionCode !== undefined) {
+    updateData.sectionCode = data.sectionCode.trim().toUpperCase();
+  }
+  if (data.sectionName !== undefined) {
+    updateData.sectionName = data.sectionName.trim();
+  }
+  if (data.description !== undefined) {
+    updateData.description = data.description.trim();
+  }
+  await updateDoc(docRef, updateData);
+};
+
+export const deleteSection = async (id: string) => {
+  const docRef = doc(db, 'sections', id);
+  await deleteDoc(docRef);
+};
+
+// Demo data removed: Sections must be created manually by the user
+export const seedToyoSectionsIfEmpty = async (_tenantId: string = 'toyo'): Promise<void> => {
+  // No demo data: sections must be created manually
+  return;
 };
 
 // ----------------------------------------------------

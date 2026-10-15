@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/authStore';
 import {
@@ -40,7 +39,6 @@ import TableViewIcon from '@mui/icons-material/TableView';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import CloudDoneIcon from '@mui/icons-material/CloudDone';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 
 // Handsontable
 import { HotTable } from '@handsontable/react';
@@ -48,13 +46,10 @@ import * as XLSX from 'xlsx';
 
 export const Machines: React.FC = () => {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const { profile, canAccessCompany } = useAuthStore();
+  const { profile } = useAuthStore();
   const tenantId = 'rileys';
   const userId = profile?.id || '';
   const userName = profile?.name || '';
-
-  const canViewToyo = canAccessCompany('toyo');
 
   // Notifications
   const [notification, setNotification] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'warning' }>({
@@ -364,27 +359,6 @@ export const Machines: React.FC = () => {
             }}
           />
 
-          {canViewToyo && (
-            <Button
-              variant="outlined"
-              endIcon={<ArrowForwardIcon fontSize="small" />}
-              onClick={() => navigate('/machines-toyo')}
-              sx={{
-                borderRadius: '10px',
-                textTransform: 'none',
-                fontWeight: 700,
-                color: '#0284c7',
-                borderColor: '#bae6fd',
-                bgcolor: '#f0f9ff',
-                '&:hover': {
-                  borderColor: '#0284c7',
-                  bgcolor: '#e0f2fe'
-                }
-              }}
-            >
-              Toyo Machine Master
-            </Button>
-          )}
 
           <Button
             variant="outlined"

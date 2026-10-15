@@ -34,10 +34,10 @@ import { DailyOutputEntry } from './pages/Planning/DailyOutputEntry';
 import { FactoryCalendar } from './pages/Planning/FactoryCalendar';
 
 // Masters Pages
-import { Plants } from './pages/Masters/Plants';
 import { Machines } from './pages/Masters/Machines';
 import { MachineMasterToyo } from './pages/Masters/MachineMasterToyo';
 import { Categories } from './pages/Masters/Categories';
+import { Sections } from './pages/Masters/Sections';
 import { Users } from './pages/Masters/Users';
 
 // Query Client for React Query
@@ -276,11 +276,7 @@ function App() {
               {/* Master Data Administration */}
               <Route
                 path="plants"
-                element={
-                  <GuardedRoute module="master" action="view">
-                    <Plants />
-                  </GuardedRoute>
-                }
+                element={<Navigate to="/" replace />}
               />
               <Route
                 path="machines"
@@ -303,6 +299,14 @@ function App() {
                 element={
                   <GuardedRoute module="master" action="view">
                     <Categories />
+                  </GuardedRoute>
+                }
+              />
+              <Route
+                path="sections"
+                element={
+                  <GuardedRoute module="master" action="view">
+                    <Sections />
                   </GuardedRoute>
                 }
               />

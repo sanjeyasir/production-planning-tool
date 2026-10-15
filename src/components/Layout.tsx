@@ -40,13 +40,11 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import PeopleIcon from '@mui/icons-material/People';
-import BusinessIcon from '@mui/icons-material/Business';
 import CategoryIcon from '@mui/icons-material/Category';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import FactoryIcon from '@mui/icons-material/Factory';
 import HomeIcon from '@mui/icons-material/Home';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
-import LockResetIcon from '@mui/icons-material/LockReset';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import DateRangeIcon from '@mui/icons-material/DateRange';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
@@ -55,6 +53,7 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturing';
+import LayersIcon from '@mui/icons-material/Layers';
 
 const DRAWER_WIDTH = 264;
 const COLLAPSED_DRAWER_WIDTH = 72;
@@ -213,20 +212,22 @@ export const Layout: React.FC = () => {
       company: 'toyo',
     },
     {
-      title: 'Plants Master',
-      path: '/plants',
-      icon: <BusinessIcon fontSize="small" />,
-      module: 'master',
-      action: 'view',
-      adminOnly: true,
-    },
-    {
-      title: 'Categories Master',
+      title: 'Category Master',
       path: '/categories',
       icon: <CategoryIcon fontSize="small" />,
       module: 'master',
       action: 'view',
       adminOnly: true,
+      company: 'rileys',
+    },
+    {
+      title: 'Section Master',
+      path: '/sections',
+      icon: <LayersIcon fontSize="small" />,
+      module: 'master',
+      action: 'view',
+      adminOnly: true,
+      company: 'toyo',
     },
     {
       title: 'Users Management',
@@ -238,21 +239,25 @@ export const Layout: React.FC = () => {
     },
   ];
 
+  // Check if current user is Tenant Admin or Super Admin
+  const isTenantAdmin = role?.name === 'Tenant Admin' || role?.id === 'tenant_admin' || profile?.roleId === 'tenant_admin';
+
   // Filter items based on user permissions and company scoping
   const filteredMenuItems = menuItems.filter((item) => {
     if ((item as any).company) {
       const comp = (item as any).company;
       if (comp === 'toyo' && !canAccessCompany('toyo')) return false;
       if (comp === 'rileys' && !canAccessCompany('rileys')) return false;
-      if (!isAdmin() && activeCompany !== comp) return false;
+      // Show only company-specific masters corresponding to the currently selected active company
+      if (activeCompany !== comp) return false;
     }
     if (item.subheader) {
-      if (item.adminOnly && !isAdmin() && role?.name !== 'Tenant Admin') {
+      if (item.adminOnly && !isAdmin() && !isTenantAdmin) {
         return false;
       }
       return true;
     }
-    if (item.adminOnly && !isAdmin() && role?.name !== 'Tenant Admin') {
+    if (item.adminOnly && !isAdmin() && !isTenantAdmin) {
       return false;
     }
     if (item.module && item.action) {
@@ -547,21 +552,6 @@ export const Layout: React.FC = () => {
                 Production & Planning
               </Typography>
             </Box>
-
-            {/* Active Shift Indicator */}
-            <Chip
-              icon={<FiberManualRecordIcon sx={{ fontSize: '10px !important', color: '#10b981 !important' }} />}
-              label="Shift A (Active)"
-              size="small"
-              sx={{
-                bgcolor: 'rgba(16, 185, 129, 0.1)',
-                color: '#059669',
-                border: '1px solid rgba(16, 185, 129, 0.25)',
-                fontWeight: 700,
-                fontSize: '0.725rem',
-                display: { xs: 'none', md: 'inline-flex' }
-              }}
-            />
           </Box>
 
           {/* Right Controls & Info */}
@@ -692,19 +682,6 @@ export const Layout: React.FC = () => {
             {role?.name} • {tenant?.companyName || "Riley's Operations"}
           </Typography>
         </Box>
-
-        <MenuItem
-          onClick={() => {
-            handleProfileMenuClose();
-            navigate('/change-password');
-          }}
-          sx={{ py: 1.2, fontSize: '0.85rem', fontWeight: 600, borderRadius: '8px', my: 0.2 }}
-        >
-          <ListItemIcon sx={{ color: '#64748b', minWidth: 32 }}>
-            <LockResetIcon fontSize="small" />
-          </ListItemIcon>
-          Change Password
-        </MenuItem>
 
         <MenuItem
           onClick={handleLogout}

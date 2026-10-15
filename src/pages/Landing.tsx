@@ -35,6 +35,8 @@ import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturing';
+import CategoryIcon from '@mui/icons-material/Category';
+import LayersIcon from '@mui/icons-material/Layers';
 
 export const Landing: React.FC = () => {
   const navigate = useNavigate();
@@ -113,7 +115,7 @@ export const Landing: React.FC = () => {
     },
     {
       title: 'Daily Output Entry',
-      description: 'Record daily actual output volumes, accepted parts, scrap, and operator shift notes.',
+      description: 'Record daily actual output volumes, accepted parts, scrap, and operator notes.',
       icon: <TrendingUpIcon sx={{ fontSize: 32, color: '#06b6d4' }} />,
       bg: 'rgba(6, 182, 212, 0.08)',
       path: '/daily-output-entry',
@@ -164,7 +166,7 @@ export const Landing: React.FC = () => {
     {
       title: activeCompany === 'toyo' ? 'Toyo Machine Master' : "Riley's Machine Master",
       description: activeCompany === 'toyo' 
-        ? 'Date-specific variable capacity schedules, shift allocations, and 12h / 24h operating configurations.'
+        ? 'Date-specific variable capacity schedules and 12h / 24h operating configurations.'
         : 'Factory machine registry with 12h / 24h operating schedules and nominal daily capacities.',
       icon: <PrecisionManufacturingIcon sx={{ fontSize: 32, color: activeCompany === 'toyo' ? '#0284c7' : '#dc2626' }} />,
       bg: activeCompany === 'toyo' ? 'rgba(2, 132, 199, 0.08)' : 'rgba(239, 68, 68, 0.08)',
@@ -172,6 +174,20 @@ export const Landing: React.FC = () => {
       module: 'master',
       action: 'view',
       actionText: activeCompany === 'toyo' ? 'Open Toyo Machine Master' : "Open Riley's Machine Master"
+    },
+    {
+      title: activeCompany === 'toyo' ? 'Toyo Section Master' : "Riley's Category Master",
+      description: activeCompany === 'toyo' 
+        ? 'Configure manufacturing sections, production departments, and machine section allocations for Toyo.'
+        : 'Manage product categories and downtime classification categories for Riley\'s Plant Operations.',
+      icon: activeCompany === 'toyo' 
+        ? <LayersIcon sx={{ fontSize: 32, color: '#0284c7' }} /> 
+        : <CategoryIcon sx={{ fontSize: 32, color: '#6366f1' }} />,
+      bg: activeCompany === 'toyo' ? 'rgba(2, 132, 199, 0.08)' : 'rgba(99, 102, 241, 0.08)',
+      path: activeCompany === 'toyo' ? '/sections' : '/categories',
+      module: 'master',
+      action: 'view',
+      actionText: activeCompany === 'toyo' ? 'Open Toyo Section Master' : "Open Category Master"
     }
   ];
 
@@ -216,7 +232,7 @@ export const Landing: React.FC = () => {
             />
             <Chip 
               icon={<FiberManualRecordIcon sx={{ fontSize: '10px !important', color: '#10b981 !important' }} />}
-              label={`Shift A • ${roleName}`} 
+              label={roleName} 
               sx={{ fontWeight: 800, fontSize: '0.8rem', bgcolor: 'rgba(16, 185, 129, 0.12)', color: '#059669', border: '1px solid rgba(16, 185, 129, 0.25)' }}
             />
           </Stack>

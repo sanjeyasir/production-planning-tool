@@ -6,6 +6,7 @@ import {
   getMachineDailyCapacities,
   getProductionOrders,
   getProductionCategories,
+  getSections,
   getHolidays,
   getProductionPlans,
   getDailyProductions,
@@ -55,69 +56,79 @@ import {
 // Icons
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CategoryIcon from '@mui/icons-material/Category';
+import LayersIcon from '@mui/icons-material/Layers';
 import FastForwardIcon from '@mui/icons-material/FastForward';
 import FastRewindIcon from '@mui/icons-material/FastRewind';
 
 export const ProductionSchedule: React.FC = () => {
   const queryClient = useQueryClient();
-  const { user, profile, tenant } = useAuthStore();
-  const tenantId = tenant?.id || '';
+  const { user, profile, tenant, activeCompany } = useAuthStore();
+  const currentTenantId = activeCompany || tenant?.id || 'rileys';
+  const isToyo = currentTenantId === 'toyo';
+  const tenantId = currentTenantId;
 
   // Queries
   const { data: machines = [] } = useQuery({
-    queryKey: ['machines', tenantId],
-    queryFn: () => getMachines(tenantId),
-    enabled: !!tenantId,
+    queryKey: ['machines', currentTenantId],
+    queryFn: () => getMachines(currentTenantId),
+    enabled: !!currentTenantId,
+  });
+
+  const { data: sections = [] } = useQuery({
+    queryKey: ['sections', currentTenantId],
+    queryFn: () => getSections(currentTenantId),
+    enabled: isToyo && !!currentTenantId,
   });
 
   const { data: categories = [] } = useQuery({
-    queryKey: ['productionCategories', tenantId],
-    queryFn: () => getProductionCategories(tenantId),
-    enabled: !!tenantId,
+    queryKey: ['productionCategories', currentTenantId],
+    queryFn: () => getProductionCategories(currentTenantId),
+    enabled: !isToyo && !!currentTenantId,
   });
 
   const { data: orders = [] } = useQuery({
-    queryKey: ['productionOrders', tenantId],
-    queryFn: () => getProductionOrders(tenantId),
-    enabled: !!tenantId,
+    queryKey: ['productionOrders', currentTenantId],
+    queryFn: () => getProductionOrders(currentTenantId),
+    enabled: !!currentTenantId,
   });
 
   const { data: holidays = [] } = useQuery({
-    queryKey: ['holidays', tenantId],
-    queryFn: () => getHolidays(tenantId),
-    enabled: !!tenantId,
+    queryKey: ['holidays', currentTenantId],
+    queryFn: () => getHolidays(currentTenantId),
+    enabled: !!currentTenantId,
   });
 
   const { data: plans = [] } = useQuery({
-    queryKey: ['productionPlans', tenantId],
-    queryFn: () => getProductionPlans(tenantId),
-    enabled: !!tenantId,
+    queryKey: ['productionPlans', currentTenantId],
+    queryFn: () => getProductionPlans(currentTenantId),
+    enabled: !!currentTenantId,
   });
 
   const { data: dailyLogs = [] } = useQuery({
-    queryKey: ['dailyProductions', tenantId],
-    queryFn: () => getDailyProductions(tenantId),
-    enabled: !!tenantId,
+    queryKey: ['dailyProductions', currentTenantId],
+    queryFn: () => getDailyProductions(currentTenantId),
+    enabled: !!currentTenantId,
   });
 
   const { data: downtimeRecords = [] } = useQuery({
-    queryKey: ['downtimeRecords', tenantId],
-    queryFn: () => getDowntimeRecords(tenantId),
-    enabled: !!tenantId,
+    queryKey: ['downtimeRecords', currentTenantId],
+    queryFn: () => getDowntimeRecords(currentTenantId),
+    enabled: !!currentTenantId,
   });
 
   const { data: dailyCapacities = [] } = useQuery({
-    queryKey: ['machineDailyCapacities', tenantId],
-    queryFn: () => getMachineDailyCapacities(tenantId),
-    enabled: !!tenantId,
+    queryKey: ['machineDailyCapacities', currentTenantId],
+    queryFn: () => getMachineDailyCapacities(currentTenantId),
+    enabled: !!currentTenantId,
   });
 
   const dailyCapacityMap = useMemo(() => {
-    const map: Record<string, { dailyCapacity: number; operatingHours: number }> = {};
+    const map: Record<string, { dailyCapacity: number; operatingHours: number; reason?: string }> = {};
     dailyCapacities.forEach(dc => {
       map[`${dc.machineId}_${dc.dateStr}`] = {
-        dailyCapacity: dc.dailyCapacity,
-        operatingHours: dc.operatingHours
+        dailyCapacity: Number(dc.dailyCapacity) || 0,
+        operatingHours: dc.operatingHours === 12 ? 12 : 24,
+        reason: dc.reason || ''
       };
     });
     return map;
@@ -126,8 +137,10 @@ export const ProductionSchedule: React.FC = () => {
   const getMachineCapacityOnDate = (m: Machine, dStr: string) => {
     const dayOverride = dailyCapacityMap[`${m.id}_${dStr}`];
     const opHours = dayOverride ? dayOverride.operatingHours : (Number(m.operatingHours) === 12 ? 12 : 24);
-    const dailyCap = dayOverride ? dayOverride.dailyCapacity : (Number(m.dailyCapacity) || ((Number(m.capacity) || 0) * opHours));
-    return { opHours, dailyCap };
+    const baseDailyCap = Number(m.dailyCapacity) || ((Number(m.capacity) || 0) * opHours);
+    const dailyCap = dayOverride !== undefined ? dayOverride.dailyCapacity : baseDailyCap;
+    const isCustom = dayOverride !== undefined && dayOverride.dailyCapacity !== baseDailyCap;
+    return { opHours, dailyCap, isCustom, reason: dayOverride?.reason };
   };
 
   const activeMachines = useMemo(() => {
@@ -142,75 +155,151 @@ export const ProductionSchedule: React.FC = () => {
     return map;
   }, [categories]);
 
+  const sectionMap = useMemo(() => {
+    const map: Record<string, any> = {};
+    sections.forEach(s => {
+      map[s.id] = s;
+    });
+    return map;
+  }, [sections]);
+
   // Filters
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('all');
   const [selectedMachineId, setSelectedMachineId] = useState<string>('all');
   const [startDateStr, setStartDateStr] = useState<string>(toLocalDateString(new Date()));
   const [timelineDaysCount, setTimelineDaysCount] = useState<number>(14);
 
-  // Available machine options matching the selected category
+  // Available machine options matching the selected category/section
   const filteredMachinesForSelect = useMemo(() => {
-    if (selectedCategoryId === 'all') return activeMachines;
-    if (selectedCategoryId === 'uncategorized') return activeMachines.filter(m => !m.categoryId || !categoryMap[m.categoryId]);
-    return activeMachines.filter(m => m.categoryId === selectedCategoryId);
-  }, [activeMachines, selectedCategoryId, categoryMap]);
+    if (selectedGroupFilter === 'all') return activeMachines;
+    if (isToyo) {
+      if (selectedGroupFilter === 'unassigned') {
+        return activeMachines.filter(m => !m.sectionId || !sectionMap[m.sectionId]);
+      }
+      return activeMachines.filter(m => m.sectionId === selectedGroupFilter || (m.sectionName && m.sectionName.toLowerCase() === (sectionMap[selectedGroupFilter]?.sectionName || '').toLowerCase()));
+    } else {
+      if (selectedGroupFilter === 'uncategorized') {
+        return activeMachines.filter(m => !m.categoryId || !categoryMap[m.categoryId]);
+      }
+      return activeMachines.filter(m => m.categoryId === selectedGroupFilter);
+    }
+  }, [activeMachines, selectedGroupFilter, isToyo, sectionMap, categoryMap]);
 
-  // Group active machines by Category for category-machine wise presentation
-  const groupedMachinesByCategory = useMemo(() => {
+  interface GroupedMachineSection {
+    groupId: string;
+    groupName: string;
+    groupCode?: string;
+    categoryId: string; // compatibility alias
+    categoryName: string; // compatibility alias
+    machines: typeof activeMachines;
+    totalDailyCapacity: number;
+  }
+
+  // Group active machines by Section (Toyo) or Category (Riley's)
+  const groupedMachines = useMemo(() => {
     const filtered = activeMachines.filter(m => {
-      if (selectedCategoryId !== 'all') {
-        if (selectedCategoryId === 'uncategorized') {
-          if (m.categoryId && categoryMap[m.categoryId]) return false;
-        } else if (m.categoryId !== selectedCategoryId) {
-          return false;
+      if (selectedGroupFilter !== 'all') {
+        if (isToyo) {
+          if (selectedGroupFilter === 'unassigned') {
+            if (m.sectionId && sectionMap[m.sectionId]) return false;
+          } else if (m.sectionId !== selectedGroupFilter && (!m.sectionName || m.sectionName.toLowerCase() !== (sectionMap[selectedGroupFilter]?.sectionName || '').toLowerCase())) {
+            return false;
+          }
+        } else {
+          if (selectedGroupFilter === 'uncategorized') {
+            if (m.categoryId && categoryMap[m.categoryId]) return false;
+          } else if (m.categoryId !== selectedGroupFilter) {
+            return false;
+          }
         }
       }
       if (selectedMachineId !== 'all' && m.id !== selectedMachineId) return false;
       return true;
     });
 
-    const groups: Array<{
-      categoryId: string;
-      categoryName: string;
-      machines: typeof activeMachines;
-      totalDailyCapacity: number;
-    }> = [];
+    const groups: GroupedMachineSection[] = [];
 
-    // 1. Group by existing categories
-    categories.forEach(cat => {
-      if (selectedCategoryId !== 'all' && selectedCategoryId !== cat.id) return;
-      const machs = filtered.filter(m => m.categoryId === cat.id);
-      if (machs.length > 0) {
-        const totalDailyCapacity = machs.reduce((sum, m) => {
+    if (isToyo) {
+      // 1. Group by Toyo Sections
+      sections.forEach(sec => {
+        if (selectedGroupFilter !== 'all' && selectedGroupFilter !== sec.id) return;
+        const machs = filtered.filter(m => m.sectionId === sec.id || (m.sectionName && m.sectionName.toLowerCase() === sec.sectionName.toLowerCase()));
+        if (machs.length > 0) {
+          const totalDailyCapacity = machs.reduce((sum, m) => {
+            const op = Number(m.operatingHours) || 24;
+            return sum + (Number(m.dailyCapacity) || ((Number(m.capacity) || 0) * op));
+          }, 0);
+          groups.push({
+            groupId: sec.id,
+            groupName: sec.sectionName,
+            groupCode: sec.sectionCode,
+            categoryId: sec.id,
+            categoryName: sec.sectionName,
+            machines: machs,
+            totalDailyCapacity
+          });
+        }
+      });
+
+      // 2. Unassigned Toyo sections
+      const unassigned = filtered.filter(m => !m.sectionId || !sectionMap[m.sectionId]);
+      if (unassigned.length > 0 && (selectedGroupFilter === 'all' || selectedGroupFilter === 'unassigned')) {
+        const totalDailyCapacity = unassigned.reduce((sum, m) => {
           const op = Number(m.operatingHours) || 24;
           return sum + (Number(m.dailyCapacity) || ((Number(m.capacity) || 0) * op));
         }, 0);
         groups.push({
-          categoryId: cat.id,
-          categoryName: cat.name,
-          machines: machs,
+          groupId: 'unassigned',
+          groupName: 'General / Unassigned Sections',
+          categoryId: 'unassigned',
+          categoryName: 'General / Unassigned Sections',
+          machines: unassigned,
           totalDailyCapacity
         });
       }
-    });
-
-    // 2. Uncategorized machines
-    const uncategorized = filtered.filter(m => !m.categoryId || !categoryMap[m.categoryId]);
-    if (uncategorized.length > 0 && (selectedCategoryId === 'all' || selectedCategoryId === 'uncategorized')) {
-      const totalDailyCapacity = uncategorized.reduce((sum, m) => {
-        const op = Number(m.operatingHours) || 24;
-        return sum + (Number(m.dailyCapacity) || ((Number(m.capacity) || 0) * op));
-      }, 0);
-      groups.push({
-        categoryId: 'uncategorized',
-        categoryName: 'General / Uncategorized Operations',
-        machines: uncategorized,
-        totalDailyCapacity
+    } else {
+      // 1. Group by Riley's Categories
+      categories.forEach(cat => {
+        if (selectedGroupFilter !== 'all' && selectedGroupFilter !== cat.id) return;
+        const machs = filtered.filter(m => m.categoryId === cat.id);
+        if (machs.length > 0) {
+          const totalDailyCapacity = machs.reduce((sum, m) => {
+            const op = Number(m.operatingHours) || 24;
+            return sum + (Number(m.dailyCapacity) || ((Number(m.capacity) || 0) * op));
+          }, 0);
+          groups.push({
+            groupId: cat.id,
+            groupName: cat.name,
+            categoryId: cat.id,
+            categoryName: cat.name,
+            machines: machs,
+            totalDailyCapacity
+          });
+        }
       });
+
+      // 2. Uncategorized Riley's machines
+      const uncategorized = filtered.filter(m => !m.categoryId || !categoryMap[m.categoryId]);
+      if (uncategorized.length > 0 && (selectedGroupFilter === 'all' || selectedGroupFilter === 'uncategorized')) {
+        const totalDailyCapacity = uncategorized.reduce((sum, m) => {
+          const op = Number(m.operatingHours) || 24;
+          return sum + (Number(m.dailyCapacity) || ((Number(m.capacity) || 0) * op));
+        }, 0);
+        groups.push({
+          groupId: 'uncategorized',
+          groupName: 'General / Uncategorized Operations',
+          categoryId: 'uncategorized',
+          categoryName: 'General / Uncategorized Operations',
+          machines: uncategorized,
+          totalDailyCapacity
+        });
+      }
     }
 
     return groups;
-  }, [activeMachines, categories, selectedCategoryId, selectedMachineId, categoryMap]);
+  }, [activeMachines, sections, categories, selectedGroupFilter, selectedMachineId, isToyo, sectionMap, categoryMap]);
+
+  const groupedMachinesByCategory = groupedMachines;
 
   // Notifications
   const [notification, setNotification] = useState<{
@@ -369,7 +458,7 @@ export const ProductionSchedule: React.FC = () => {
   const downtimeMap = useMemo(() => {
     const map: Record<string, typeof downtimeRecords> = {};
     downtimeRecords.forEach(dt => {
-      const dtDateStr = toLocalDateString(dt.startTime);
+      const dtDateStr = dt.dateStr || toLocalDateString(dt.startTime);
       const key = `${dt.machineId}_${dtDateStr}`;
       if (!map[key]) map[key] = [];
       map[key].push(dt);
@@ -440,26 +529,38 @@ export const ProductionSchedule: React.FC = () => {
       <Card sx={{ bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', p: 0.5, mb: 3 }}>
         <CardContent sx={{ p: 2 }}>
           <Grid container spacing={2} sx={{ alignItems: 'center' }}>
-            {/* Category Filter */}
+            {/* Section / Category Filter */}
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <FormControl fullWidth size="small">
-                <InputLabel id="gantt-category-select">Category</InputLabel>
+                <InputLabel id="gantt-group-select">{isToyo ? 'Section' : 'Category'}</InputLabel>
                 <Select
-                  labelId="gantt-category-select"
-                  label="Category"
-                  value={selectedCategoryId}
+                  labelId="gantt-group-select"
+                  label={isToyo ? 'Section' : 'Category'}
+                  value={selectedGroupFilter}
                   onChange={(e) => {
-                    setSelectedCategoryId(e.target.value);
+                    setSelectedGroupFilter(e.target.value);
                     setSelectedMachineId('all');
                   }}
                 >
-                  <MenuItem value="all">All Categories ({categories.length})</MenuItem>
-                  {categories.map((c) => (
-                    <MenuItem key={c.id} value={c.id}>
-                      {c.name}
-                    </MenuItem>
-                  ))}
-                  <MenuItem value="uncategorized">General / Uncategorized</MenuItem>
+                  <MenuItem value="all">
+                    {isToyo ? `All Sections (${sections.length})` : `All Categories (${categories.length})`}
+                  </MenuItem>
+                  {isToyo ? (
+                    sections.map((s) => (
+                      <MenuItem key={s.id} value={s.id}>
+                        {s.sectionName} {s.sectionCode ? `(${s.sectionCode})` : ''}
+                      </MenuItem>
+                    ))
+                  ) : (
+                    categories.map((c) => (
+                      <MenuItem key={c.id} value={c.id}>
+                        {c.name}
+                      </MenuItem>
+                    ))
+                  )}
+                  <MenuItem value={isToyo ? 'unassigned' : 'uncategorized'}>
+                    {isToyo ? 'General / Unassigned Sections' : 'General / Uncategorized'}
+                  </MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -474,7 +575,9 @@ export const ProductionSchedule: React.FC = () => {
                   value={selectedMachineId}
                   onChange={(e) => setSelectedMachineId(e.target.value)}
                 >
-                  <MenuItem value="all">All Lines in Category ({filteredMachinesForSelect.length})</MenuItem>
+                  <MenuItem value="all">
+                    All Lines in {isToyo ? 'Section' : 'Category'} ({filteredMachinesForSelect.length})
+                  </MenuItem>
                   {filteredMachinesForSelect.map((m) => {
                     const opHours = m.operatingHours || 24;
                     const dailyCap = m.dailyCapacity || ((m.capacity || 0) * opHours);
@@ -544,14 +647,14 @@ export const ProductionSchedule: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Daily Schedule Gantt Grid Table - Presented Category-Machine Wise */}
+      {/* Daily Schedule Gantt Grid Table - Presented Section-Wise (Toyo) or Category-Wise (Riley's) */}
       <Card sx={{ borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', overflow: 'hidden' }}>
         <TableContainer sx={{ maxHeight: 680, overflowX: 'auto' }}>
           <Table size="small" stickyHeader>
             <TableHead>
               <TableRow>
                 <TableCell sx={{ minWidth: 200, fontWeight: 800, bgcolor: '#f8fafc', zIndex: 10 }}>
-                  Machine Line & Category
+                  Machine Line & {isToyo ? 'Section' : 'Category'}
                 </TableCell>
                 {timelineDates.map((dateStr) => {
                   const d = parseLocalDate(dateStr);
@@ -592,55 +695,73 @@ export const ProductionSchedule: React.FC = () => {
             <TableBody>
               {groupedMachinesByCategory.length > 0 ? (
                 groupedMachinesByCategory.map((group) => (
-                  <React.Fragment key={group.categoryId}>
-                    {/* Category Group Section Header Row */}
-                    <TableRow sx={{ bgcolor: '#f1f5f9', borderTop: '2px solid #cbd5e1', borderBottom: '1px solid #cbd5e1' }}>
+                  <React.Fragment key={group.groupId || group.categoryId}>
+                    {/* Category / Section Group Header Row */}
+                    <TableRow sx={{ bgcolor: isToyo ? 'rgba(2, 132, 199, 0.05)' : 'rgba(99, 102, 241, 0.05)', borderTop: '2px solid #cbd5e1', borderBottom: '1px solid #cbd5e1' }}>
                       <TableCell
                         colSpan={1 + timelineDates.length}
                         sx={{
                           py: 1.2,
                           px: 2,
-                          bgcolor: 'rgba(99, 102, 241, 0.06)',
-                          borderLeft: '4px solid #4f46e5'
+                          bgcolor: isToyo ? 'rgba(2, 132, 199, 0.07)' : 'rgba(99, 102, 241, 0.06)',
+                          borderLeft: isToyo ? '4px solid #0284c7' : '4px solid #4f46e5'
                         }}
                       >
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <CategoryIcon sx={{ color: '#4f46e5', fontSize: 19 }} />
-                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1e1b4b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                              Category: {group.categoryName}
+                            {isToyo ? (
+                              <LayersIcon sx={{ color: '#0284c7', fontSize: 19 }} />
+                            ) : (
+                              <CategoryIcon sx={{ color: '#4f46e5', fontSize: 19 }} />
+                            )}
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: isToyo ? '#0c4a6e' : '#1e1b4b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                              {isToyo ? 'Section' : 'Category'}: {group.groupName} {group.groupCode ? `(${group.groupCode})` : ''}
                             </Typography>
                             <Chip
                               label={`${group.machines.length} ${group.machines.length === 1 ? 'Line' : 'Lines'}`}
                               size="small"
-                              sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700, bgcolor: '#e0e7ff', color: '#3730a3' }}
+                              sx={{
+                                height: 20,
+                                fontSize: '0.68rem',
+                                fontWeight: 700,
+                                bgcolor: isToyo ? '#e0f2fe' : '#e0e7ff',
+                                color: isToyo ? '#0369a1' : '#3730a3'
+                              }}
                             />
                           </Box>
                           <Typography variant="caption" sx={{ color: '#475569', fontWeight: 700 }}>
-                            Category Daily Capacity: <strong>{group.totalDailyCapacity.toLocaleString()} Units/Day</strong>
+                            {isToyo ? 'Section' : 'Category'} Daily Capacity: <strong>{group.totalDailyCapacity.toLocaleString()} Units/Day</strong>
                           </Typography>
                         </Box>
                       </TableCell>
                     </TableRow>
 
-                    {/* Machine Rows for this Category */}
+                    {/* Machine Rows for this Category / Section */}
                     {group.machines.map((machine) => {
                       const opHours = Number(machine.operatingHours) || 24;
                       const dailyCap = Number(machine.dailyCapacity) || ((Number(machine.capacity) || 0) * opHours);
-                      const catName = categoryMap[machine.categoryId || ''] || group.categoryName;
+                      const displayGroupLabel = isToyo
+                        ? (machine.sectionName || (machine.sectionId ? sectionMap[machine.sectionId]?.sectionName : '') || group.groupName)
+                        : (categoryMap[machine.categoryId || ''] || group.categoryName);
 
                       return (
                         <TableRow key={machine.id} hover>
                           {/* Machine info column */}
                           <TableCell sx={{ fontWeight: 700, bgcolor: '#ffffff', borderRight: '1px solid #e2e8f0', minWidth: 200, p: 1.2 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.3 }}>
-                              <Typography variant="body2" sx={{ fontWeight: 800, color: '#4f46e5' }}>
+                              <Typography variant="body2" sx={{ fontWeight: 800, color: isToyo ? '#0284c7' : '#4f46e5' }}>
                                 {machine.machineCode}
                               </Typography>
                               <Chip
-                                label={catName}
+                                label={displayGroupLabel}
                                 size="small"
-                                sx={{ height: 18, fontSize: '0.62rem', fontWeight: 700, bgcolor: '#f1f5f9', color: '#475569' }}
+                                sx={{
+                                  height: 18,
+                                  fontSize: '0.62rem',
+                                  fontWeight: 700,
+                                  bgcolor: isToyo ? 'rgba(2, 132, 199, 0.08)' : '#f1f5f9',
+                                  color: isToyo ? '#0284c7' : '#475569'
+                                }}
                               />
                             </Box>
                             <Typography variant="caption" sx={{ color: '#334155', display: 'block', fontWeight: 600 }}>
@@ -649,7 +770,14 @@ export const ProductionSchedule: React.FC = () => {
                             <Chip
                               size="small"
                               label={`${opHours}h/day • ${(dailyCap || 0).toLocaleString()} u/d`}
-                              sx={{ mt: 0.5, fontSize: '0.65rem', height: 18, fontWeight: 700, bgcolor: 'rgba(99, 102, 241, 0.08)', color: '#4f46e5' }}
+                              sx={{
+                                mt: 0.5,
+                                fontSize: '0.65rem',
+                                height: 18,
+                                fontWeight: 700,
+                                bgcolor: isToyo ? 'rgba(2, 132, 199, 0.08)' : 'rgba(99, 102, 241, 0.08)',
+                                color: isToyo ? '#0284c7' : '#4f46e5'
+                              }}
                             />
                           </TableCell>
 
@@ -658,6 +786,17 @@ export const ProductionSchedule: React.FC = () => {
                             const hol = holidayMap[dateStr];
                             const dtKey = `${machine.id}_${dateStr}`;
                             const dts = downtimeMap[dtKey];
+                            const dayOverride = dailyCapacityMap[dtKey];
+                            const reasonLower = (dayOverride?.reason || '').toLowerCase();
+                            const isCapacityDowntime = dayOverride !== undefined && (
+                              dayOverride.dailyCapacity === 0 ||
+                              reasonLower.includes('downtime') ||
+                              reasonLower.includes('maintenance') ||
+                              reasonLower.includes('breakdown') ||
+                              reasonLower.includes('shutdown') ||
+                              reasonLower.includes('service')
+                            );
+                            const hasDowntime = (dts && dts.length > 0) || isCapacityDowntime;
 
                             // If Holiday, strictly render Holiday block and no allocation
                             if (hol) {
@@ -675,9 +814,11 @@ export const ProductionSchedule: React.FC = () => {
                               );
                             }
 
-                            // If Downtime
-                            if (dts && dts.length > 0) {
-                              const dtText = dts[0].remarks || dts[0].reason || 'Line Stoppage';
+                            // If Downtime (Scheduled downtime via downtime records or machine master)
+                            if (hasDowntime) {
+                              const dtText = (dts && dts.length > 0 ? (dts[0].remarks || dts[0].reason) : '') ||
+                                dayOverride?.reason ||
+                                (dayOverride?.dailyCapacity === 0 ? 'Scheduled Downtime' : 'Line Stoppage');
                               return (
                                 <TableCell key={dateStr} align="center" sx={{ bgcolor: 'rgba(239, 68, 68, 0.05)', p: 1, borderRight: '1px solid #f1f5f9' }}>
                                   <Box sx={{ p: 1, borderRadius: '8px', bgcolor: 'rgba(239, 68, 68, 0.12)', border: '1px solid #ef4444' }}>
@@ -942,11 +1083,11 @@ export const ProductionSchedule: React.FC = () => {
                                   </Box>
                                 )}
                                 {(() => {
-                                  const { opHours: dayOpHours, dailyCap: dayDailyCap } = getMachineCapacityOnDate(machine, dateStr);
+                                  const { opHours: dayOpHours, dailyCap: dayDailyCap, isCustom } = getMachineCapacityOnDate(machine, dateStr);
                                   return (
-                                    <Tooltip title={`Available Capacity on ${dateStr}: ${dayDailyCap.toLocaleString()} units (${dayOpHours}h config)`}>
-                                      <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.68rem', display: 'block', mt: hasFuturePlans ? 0 : 1 }}>
-                                        — Free ({dayDailyCap > 0 ? `${dayDailyCap.toLocaleString()}u` : '0u'}) —
+                                    <Tooltip title={`Available Capacity on ${dateStr}: ${dayDailyCap.toLocaleString()} units (${dayOpHours}h config)${isCustom ? ' • Updated in Toyo Machine Master' : ''}`}>
+                                      <Typography variant="caption" sx={{ color: isCustom ? '#0284c7' : '#94a3b8', fontWeight: isCustom ? 700 : 400, fontSize: '0.68rem', display: 'block', mt: hasFuturePlans ? 0 : 1 }}>
+                                        — Free ({dayDailyCap > 0 ? `${dayDailyCap.toLocaleString()}u` : '0u'}{isCustom ? ' Updated' : ''}) —
                                       </Typography>
                                     </Tooltip>
                                   );

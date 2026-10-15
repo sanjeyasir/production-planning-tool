@@ -1,7 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '../../store/authStore';
 import {
   getMachines,
   getMachineDailyCapacities,
@@ -10,6 +8,7 @@ import {
   createMachine,
   updateMachine,
   deleteMachine,
+  getSections,
   toLocalDateString,
   type Machine,
   type MachineDailyCapacity
@@ -57,7 +56,6 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturing';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import TableViewIcon from '@mui/icons-material/TableView';
 import SaveIcon from '@mui/icons-material/Save';
@@ -76,11 +74,7 @@ const parseDateStr = (str: string): Date => {
 
 export const MachineMasterToyo: React.FC = () => {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const { canAccessCompany } = useAuthStore();
   const toyoTenantId = 'toyo';
-
-  const canViewRileys = canAccessCompany('rileys');
 
   // Mode: 0 = Daily Machine Master (Day-to-Day Capacity), 1 = Multi-Day Timeline Matrix
   const [activeTab, setActiveTab] = useState<number>(0);
@@ -105,6 +99,16 @@ export const MachineMasterToyo: React.FC = () => {
     severity: 'success'
   });
 
+  // Query Toyo Sections from Section Master
+  const { data: sections = [] } = useQuery({
+    queryKey: ['sections', toyoTenantId],
+    queryFn: () => getSections(toyoTenantId),
+  });
+
+
+  // Section Filter State
+  const [selectedSectionFilter, setSelectedSectionFilter] = useState<string>('ALL');
+
   // Queries for Toyo Machines
   const { data: machines = [], isLoading: loadingMachines } = useQuery({
     queryKey: ['machines', toyoTenantId],
@@ -126,16 +130,18 @@ export const MachineMasterToyo: React.FC = () => {
     return map;
   }, [dailyCapacities]);
 
-  // Filtered Machines by Code or Name
+  // Filtered Machines by Code, Name, Section, or Section Filter
   const filteredMachines = useMemo(() => {
     const match = search.trim().toLowerCase();
-    if (!match) return machines;
     return machines.filter(m => {
       const code = (m.machineCode || '').toLowerCase();
       const name = (m.machineName || '').toLowerCase();
-      return code.includes(match) || name.includes(match);
+      const sec = (m.sectionName || '').toLowerCase();
+      const matchesSearch = !match || code.includes(match) || name.includes(match) || sec.includes(match);
+      const matchesSection = selectedSectionFilter === 'ALL' || m.sectionId === selectedSectionFilter;
+      return matchesSearch && matchesSection;
     });
-  }, [machines, search]);
+  }, [machines, search, selectedSectionFilter]);
 
   // State for Daily Capacity Entry Sheet (local edits before batch save for singleDate)
   const [dailySheetRows, setDailySheetRows] = useState<Record<string, {
@@ -183,6 +189,7 @@ export const MachineMasterToyo: React.FC = () => {
   const [machineFormData, setMachineFormData] = useState({
     machineCode: '',
     machineName: '',
+    sectionId: '',
     dateStr: toLocalDateString(new Date()),
     dailyCapacity: 3500,
     operatingHours: 24, // strictly 12 or 24
@@ -241,6 +248,8 @@ export const MachineMasterToyo: React.FC = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['toyoDailyCapacities', toyoTenantId] });
+      queryClient.invalidateQueries({ queryKey: ['machineDailyCapacities'] });
+      queryClient.invalidateQueries({ queryKey: ['machines'] });
       setDayCapacityDialogOpen(false);
       setNotification({
         open: true,
@@ -287,6 +296,8 @@ export const MachineMasterToyo: React.FC = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['toyoDailyCapacities', toyoTenantId] });
+      queryClient.invalidateQueries({ queryKey: ['machineDailyCapacities'] });
+      queryClient.invalidateQueries({ queryKey: ['machines'] });
       setNotification({
         open: true,
         message: `Daily machine capacities for ${singleDate} saved successfully!`,
@@ -306,10 +317,15 @@ export const MachineMasterToyo: React.FC = () => {
   const saveMachineMutation = useMutation({
     mutationFn: async (payload: typeof machineFormData) => {
       const opHours = Number(payload.operatingHours) === 12 ? 12 : 24;
+      const matchedSection = sections.find(s => s.id === payload.sectionId);
+      const sectionName = matchedSection ? matchedSection.sectionName : '';
+
       if (editingMachine) {
         await updateMachine(editingMachine.id, {
           machineCode: payload.machineCode.trim().toUpperCase(),
           machineName: payload.machineName.trim(),
+          sectionId: payload.sectionId || '',
+          sectionName,
           dailyCapacity: Number(payload.dailyCapacity),
           operatingHours: opHours,
           status: payload.status
@@ -319,6 +335,8 @@ export const MachineMasterToyo: React.FC = () => {
           tenantId: toyoTenantId,
           plantId: 'toyo-main',
           categoryId: 'general',
+          sectionId: payload.sectionId || '',
+          sectionName,
           machineCode: payload.machineCode.trim().toUpperCase(),
           machineName: payload.machineName.trim(),
           dailyCapacity: Number(payload.dailyCapacity),
@@ -352,7 +370,10 @@ export const MachineMasterToyo: React.FC = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['machines', toyoTenantId] });
+      queryClient.invalidateQueries({ queryKey: ['sections', toyoTenantId] });
       queryClient.invalidateQueries({ queryKey: ['toyoDailyCapacities', toyoTenantId] });
+      queryClient.invalidateQueries({ queryKey: ['machineDailyCapacities'] });
+      queryClient.invalidateQueries({ queryKey: ['machines'] });
       setMachineDialogOpen(false);
       setNotification({
         open: true,
@@ -377,6 +398,8 @@ export const MachineMasterToyo: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['machines', toyoTenantId] });
       queryClient.invalidateQueries({ queryKey: ['toyoDailyCapacities', toyoTenantId] });
+      queryClient.invalidateQueries({ queryKey: ['machineDailyCapacities'] });
+      queryClient.invalidateQueries({ queryKey: ['machines'] });
       setNotification({ open: true, message: 'Machine deleted from Toyo Master', severity: 'info' });
     },
     onError: (err: any) => {
@@ -411,6 +434,7 @@ export const MachineMasterToyo: React.FC = () => {
       setMachineFormData({
         machineCode: machine.machineCode,
         machineName: machine.machineName,
+        sectionId: machine.sectionId || '',
         dateStr: singleDate,
         dailyCapacity: machine.dailyCapacity,
         operatingHours: machine.operatingHours === 12 ? 12 : 24,
@@ -421,6 +445,7 @@ export const MachineMasterToyo: React.FC = () => {
       setMachineFormData({
         machineCode: '',
         machineName: '',
+        sectionId: '',
         dateStr: singleDate,
         dailyCapacity: 3500,
         operatingHours: 24,
@@ -465,6 +490,7 @@ export const MachineMasterToyo: React.FC = () => {
       return {
         'Machine Code': m.machineCode,
         'Machine Name': m.machineName,
+        'Section': m.sectionName || 'Unassigned',
         'Scheduled Date': singleDate,
         'Operating Hours': `${row.operatingHours === 12 ? 12 : 24} Hours/Day`,
         'Scheduled Capacity (Units/Day)': row.dailyCapacity,
@@ -572,28 +598,6 @@ export const MachineMasterToyo: React.FC = () => {
               fontSize: '0.8rem'
             }}
           />
-
-          {canViewRileys && (
-            <Button
-              variant="outlined"
-              startIcon={<ArrowBackIcon fontSize="small" />}
-              onClick={() => navigate('/machines')}
-              sx={{
-                borderRadius: '10px',
-                textTransform: 'none',
-                fontWeight: 700,
-                color: '#dc2626',
-                borderColor: '#fca5a5',
-                bgcolor: '#fff1f2',
-                '&:hover': {
-                  borderColor: '#dc2626',
-                  bgcolor: '#ffe4e6'
-                }
-              }}
-            >
-              Riley's Machine Master
-            </Button>
-          )}
 
           <Button
             variant="outlined"
@@ -721,8 +725,24 @@ export const MachineMasterToyo: React.FC = () => {
                 />
               </Box>
 
-              {/* Controls: Search & Save All */}
-              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: { xs: 'space-between', md: 'flex-end' } }}>
+              {/* Controls: Search, Section Filter & Save All */}
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: { xs: 'space-between', md: 'flex-end' }, flexWrap: 'wrap' }}>
+                <FormControl size="small" sx={{ minWidth: 150, bgcolor: '#ffffff' }}>
+                  <InputLabel>Filter Section</InputLabel>
+                  <Select
+                    value={selectedSectionFilter}
+                    label="Filter Section"
+                    onChange={(e) => setSelectedSectionFilter(e.target.value)}
+                  >
+                    <MenuItem value="ALL">All Sections</MenuItem>
+                    {sections.map(s => (
+                      <MenuItem key={s.id} value={s.id}>
+                        {s.sectionName}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
                 <TextField
                   size="small"
                   placeholder="Filter machines..."
@@ -737,7 +757,7 @@ export const MachineMasterToyo: React.FC = () => {
                       )
                     }
                   }}
-                  sx={{ bgcolor: '#ffffff', width: { xs: 150, sm: 200 } }}
+                  sx={{ bgcolor: '#ffffff', width: { xs: 150, sm: 180 } }}
                 />
 
                 <Button
@@ -793,8 +813,9 @@ export const MachineMasterToyo: React.FC = () => {
                 <TableHead sx={{ bgcolor: '#f8fafc' }}>
                   <TableRow sx={{ '& th': { fontWeight: 800, color: '#0f172a', py: 1.5, fontSize: '0.8rem' } }}>
                     <TableCell sx={{ width: 50, textAlign: 'center' }}>#</TableCell>
-                    <TableCell sx={{ width: 150 }}>Machine Code</TableCell>
-                    <TableCell sx={{ width: 200 }}>Machine Name</TableCell>
+                    <TableCell sx={{ width: 140 }}>Machine Code</TableCell>
+                    <TableCell sx={{ width: 180 }}>Machine Name</TableCell>
+                    <TableCell sx={{ width: 160 }}>Section</TableCell>
                     <TableCell sx={{ width: 130 }}>Scheduled Date</TableCell>
                     <TableCell sx={{ width: 180 }}>Schedule Config</TableCell>
                     <TableCell sx={{ width: 220 }}>Day Capacity (Units/Day)</TableCell>
@@ -807,7 +828,7 @@ export const MachineMasterToyo: React.FC = () => {
                 <TableBody>
                   {loadingMachines || loadingCapacities ? (
                     <TableRow>
-                      <TableCell colSpan={10} align="center" sx={{ py: 6 }}>
+                      <TableCell colSpan={11} align="center" sx={{ py: 6 }}>
                         <CircularProgress size={30} sx={{ color: '#0284c7', mb: 1 }} />
                         <Typography variant="body2" sx={{ color: '#64748b' }}>
                           Loading Toyo Machines and daily capacities...
@@ -816,7 +837,7 @@ export const MachineMasterToyo: React.FC = () => {
                     </TableRow>
                   ) : filteredMachines.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} align="center" sx={{ py: 6, color: '#64748b' }}>
+                      <TableCell colSpan={11} align="center" sx={{ py: 6, color: '#64748b' }}>
                         <Typography variant="body1" sx={{ fontWeight: 700, color: '#334155' }}>
                           No Toyo machines registered.
                         </Typography>
@@ -858,6 +879,27 @@ export const MachineMasterToyo: React.FC = () => {
                           {/* Machine Name */}
                           <TableCell sx={{ fontWeight: 600, color: '#1e293b', fontSize: '0.85rem' }}>
                             {m.machineName}
+                          </TableCell>
+
+                          {/* Section */}
+                          <TableCell>
+                            {m.sectionName ? (
+                              <Chip
+                                size="small"
+                                label={m.sectionName}
+                                sx={{
+                                  bgcolor: '#f0fdf4',
+                                  color: '#166534',
+                                  border: '1px solid #bbf7d0',
+                                  fontWeight: 700,
+                                  fontSize: '0.72rem'
+                                }}
+                              />
+                            ) : (
+                              <Typography variant="caption" sx={{ color: '#94a3b8', fontStyle: 'italic' }}>
+                                Unassigned
+                              </Typography>
+                            )}
                           </TableCell>
 
                           {/* Scheduled Date */}
@@ -1200,6 +1242,11 @@ export const MachineMasterToyo: React.FC = () => {
                                 <Typography variant="caption" sx={{ color: '#64748b', display: 'block', fontSize: '0.7rem' }}>
                                   {m.machineName}
                                 </Typography>
+                                {m.sectionName && (
+                                  <Typography variant="caption" sx={{ color: '#0369a1', fontWeight: 700, display: 'block', fontSize: '0.65rem' }}>
+                                    {m.sectionName}
+                                  </Typography>
+                                )}
                               </Box>
                             </Box>
                           </TableCell>
@@ -1532,6 +1579,35 @@ export const MachineMasterToyo: React.FC = () => {
             value={machineFormData.machineName}
             onChange={(e) => setMachineFormData({ ...machineFormData, machineName: e.target.value })}
           />
+
+          {/* Section Selection from Section Master */}
+          <FormControl fullWidth required>
+            <InputLabel id="toyo-machine-section-label">Production Section</InputLabel>
+            <Select
+              labelId="toyo-machine-section-label"
+              value={machineFormData.sectionId}
+              label="Production Section"
+              onChange={(e) => setMachineFormData({ ...machineFormData, sectionId: e.target.value })}
+            >
+              <MenuItem value="">
+                <em>-- Select Section --</em>
+              </MenuItem>
+              {sections.map((sec) => (
+                <MenuItem key={sec.id} value={sec.id}>
+                  {sec.sectionName} {sec.sectionCode ? `(${sec.sectionCode})` : ''}
+                </MenuItem>
+              ))}
+            </Select>
+            {sections.length === 0 ? (
+              <Typography variant="caption" sx={{ color: '#e11d48', mt: 0.5, display: 'block' }}>
+                No sections found. You can add sections in the Toyo Section Master.
+              </Typography>
+            ) : (
+              <Typography variant="caption" sx={{ color: '#64748b', mt: 0.5, display: 'block' }}>
+                Assigned section from Toyo Section Master
+              </Typography>
+            )}
+          </FormControl>
 
           {/* Scheduled Date picker */}
           {!editingMachine && (

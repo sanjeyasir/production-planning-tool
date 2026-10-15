@@ -180,11 +180,6 @@ export const Login: React.FC = () => {
     }
   };
 
-  const handleQuickFillAdmin = () => {
-    setEmail('admin@gmail.com');
-    setPassword('admin123');
-  };
-
   return (
     <Box
       sx={{
@@ -467,49 +462,6 @@ export const Login: React.FC = () => {
               </Button>
             </Stack>
           </form>
-
-          {/* Quick Demo Credentials Assistant */}
-          <Box
-            sx={{
-              mt: 3,
-              p: 1.5,
-              bgcolor: 'rgba(30, 41, 59, 0.7)',
-              borderRadius: '12px',
-              border: '1px solid rgba(2, 132, 199, 0.25)',
-            }}
-          >
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Box>
-                <Typography variant="caption" sx={{ color: '#38bdf8', fontWeight: 700, display: 'block' }}>
-                  Default Admin Access (All Companies):
-                </Typography>
-                <Typography variant="caption" sx={{ color: '#ffffff', fontFamily: 'monospace', fontWeight: 600 }}>
-                  admin@gmail.com / admin123
-                </Typography>
-              </Box>
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={handleQuickFillAdmin}
-                sx={{
-                  fontSize: '0.7rem',
-                  fontWeight: 700,
-                  py: 0.3,
-                  px: 1.2,
-                  color: '#38bdf8',
-                  borderColor: 'rgba(2, 132, 199, 0.4)',
-                  bgcolor: 'rgba(2, 132, 199, 0.1)',
-                  '&:hover': {
-                    borderColor: '#38bdf8',
-                    bgcolor: 'rgba(2, 132, 199, 0.22)',
-                    color: '#ffffff',
-                  },
-                }}
-              >
-                Quick Fill
-              </Button>
-            </Box>
-          </Box>
         </CardContent>
       </Card>
 

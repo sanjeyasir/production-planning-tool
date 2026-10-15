@@ -50,6 +50,7 @@ import AddIcon from '@mui/icons-material/Add';
 import LockResetIcon from '@mui/icons-material/LockReset';
 import PeopleIcon from '@mui/icons-material/People';
 import SearchIcon from '@mui/icons-material/Search';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
 
 import { 
   collection, 
@@ -63,7 +64,93 @@ import {
 import { db, auth, registerSecondaryUser } from '../../firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 
-const ROLE_MAP: Record<string, string> = {
+export interface RoleDefinition {
+  id: string;
+  name: string;
+  description: string;
+  defaultPermissions: string[];
+  badgeColor: { bg: string; color: string; border: string };
+}
+
+export const ROLE_DEFINITIONS: Record<string, RoleDefinition> = {
+  super_admin: {
+    id: 'super_admin',
+    name: 'Super Admin',
+    description: 'Global administrator with multi-company access, role setup, and complete system control.',
+    defaultPermissions: [
+      'production:view',
+      'production:create',
+      'downtime:view',
+      'downtime:create',
+      'master:view',
+      'user:view'
+    ],
+    badgeColor: { bg: 'rgba(239, 68, 68, 0.1)', color: '#dc2626', border: 'rgba(239, 68, 68, 0.3)' }
+  },
+  tenant_admin: {
+    id: 'tenant_admin',
+    name: 'Tenant Admin',
+    description: 'Full plant authority over schedules, outputs, downtime, masters, and team members.',
+    defaultPermissions: [
+      'production:view',
+      'production:create',
+      'downtime:view',
+      'downtime:create',
+      'master:view',
+      'user:view'
+    ],
+    badgeColor: { bg: 'rgba(147, 51, 234, 0.1)', color: '#9333ea', border: 'rgba(147, 51, 234, 0.3)' }
+  },
+  plant_manager: {
+    id: 'plant_manager',
+    name: 'Plant Manager',
+    description: 'Supervises overall plant planning, schedules, production KPIs, downtime, and machine masters.',
+    defaultPermissions: [
+      'production:view',
+      'production:create',
+      'downtime:view',
+      'downtime:create',
+      'master:view'
+    ],
+    badgeColor: { bg: 'rgba(79, 70, 229, 0.1)', color: '#4f46e5', border: 'rgba(79, 70, 229, 0.3)' }
+  },
+  supervisor: {
+    id: 'supervisor',
+    name: 'Supervisor',
+    description: 'Manages daily line operations, schedule execution, output logs, downtime events, and reports.',
+    defaultPermissions: [
+      'production:view',
+      'production:create',
+      'downtime:view',
+      'downtime:create',
+      'master:view'
+    ],
+    badgeColor: { bg: 'rgba(2, 132, 199, 0.1)', color: '#0284c7', border: 'rgba(2, 132, 199, 0.3)' }
+  },
+  operator: {
+    id: 'operator',
+    name: 'Operator',
+    description: 'Shop floor operator responsible for daily output logging, downtime entries, and schedule visibility.',
+    defaultPermissions: [
+      'production:view',
+      'production:create',
+      'downtime:create'
+    ],
+    badgeColor: { bg: 'rgba(16, 185, 129, 0.1)', color: '#059669', border: 'rgba(16, 185, 129, 0.3)' }
+  },
+  viewer: {
+    id: 'viewer',
+    name: 'Viewer',
+    description: 'Read-only access to portal dashboards, production charts, and downtime analytics.',
+    defaultPermissions: [
+      'production:view',
+      'downtime:view'
+    ],
+    badgeColor: { bg: 'rgba(100, 116, 139, 0.1)', color: '#475569', border: 'rgba(100, 116, 139, 0.3)' }
+  }
+};
+
+export const ROLE_MAP: Record<string, string> = {
   'super_admin': 'Super Admin',
   'tenant_admin': 'Tenant Admin',
   'plant_manager': 'Plant Manager',
@@ -73,11 +160,11 @@ const ROLE_MAP: Record<string, string> = {
 };
 
 const SCREEN_PERMISSIONS = [
-  { id: 'downtime:view', name: 'Downtime Analytics (Dashboard)' },
-  { id: 'production:view', name: 'Production Analytics (Dashboard)' },
-  { id: 'downtime:create', name: 'Enter Downtime Operations' },
-  { id: 'production:create', name: 'Enter Production Operations' },
-  { id: 'master:view', name: 'Master Data (Plants, Machines, Categories)' },
+  { id: 'production:view', name: 'Production & Planning View (Orders, Schedules, Analytics)' },
+  { id: 'production:create', name: 'Planning & Output Entry (Schedule Creation, Daily Output)' },
+  { id: 'downtime:view', name: 'Downtime Analytics (Dashboard & Reports)' },
+  { id: 'downtime:create', name: 'Log Downtime Operations' },
+  { id: 'master:view', name: 'Master Data (Machines, Categories/Sections, Calendar)' },
   { id: 'user:view', name: 'Users & Permissions Management' },
 ];
 
@@ -130,9 +217,9 @@ export const Users: React.FC = () => {
     name: '',
     email: '',
     password: '',
-    roleId: 'viewer',
+    roleId: 'operator',
     company: 'rileys',
-    permissions: ['downtime:view', 'production:view']
+    permissions: ROLE_DEFINITIONS.operator.defaultPermissions
   });
   const [creating, setCreating] = useState(false);
 
@@ -164,15 +251,23 @@ export const Users: React.FC = () => {
   }, [users, search]);
 
   const handleEditClick = (user: any) => {
+    const roleId = user.roleId || 'viewer';
+    const currentPerms = (user.permissions && user.permissions.length > 0)
+      ? user.permissions
+      : (ROLE_DEFINITIONS[roleId]?.defaultPermissions || ['production:view', 'downtime:view']);
+
     setEditingUser(user);
     setEditFormData({
-      roleId: user.roleId,
+      roleId,
       company: user.company || (user.tenantId === 'toyo' ? 'toyo' : 'rileys'),
-      status: user.status,
-      permissions: user.permissions || []
+      status: user.status || 'ACTIVE',
+      permissions: currentPerms
     });
     setEditDialogOpen(true);
   };
+
+  const createRoleDef = ROLE_DEFINITIONS[createFormData.roleId] || ROLE_DEFINITIONS.operator;
+  const editRoleDef = ROLE_DEFINITIONS[editFormData.roleId] || ROLE_DEFINITIONS.viewer;
 
   const handleCreatePermissionToggle = (permId: string) => {
     const currentPerms = createFormData.permissions;
@@ -285,9 +380,9 @@ export const Users: React.FC = () => {
         name: '', 
         email: '', 
         password: '', 
-        roleId: 'viewer', 
+        roleId: 'operator', 
         company: 'rileys',
-        permissions: ['downtime:view', 'production:view'] 
+        permissions: ROLE_DEFINITIONS.operator.defaultPermissions 
       });
       setNotification({ open: true, message: 'User created successfully with company access! They will change their password on first login.', severity: 'success' });
     } catch (err: any) {
@@ -395,12 +490,31 @@ export const Users: React.FC = () => {
                           </TableCell>
                           <TableCell sx={{ color: '#475569' }}>{u.email}</TableCell>
                           <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <SecurityIcon sx={{ color: '#6366f1', fontSize: 17 }} />
-                              <Typography variant="body2" sx={{ fontWeight: 600, color: '#334155' }}>
-                                {ROLE_MAP[u.roleId] || 'Viewer'}
-                              </Typography>
-                            </Box>
+                            {(() => {
+                              const roleDef = ROLE_DEFINITIONS[u.roleId] || ROLE_DEFINITIONS.viewer;
+                              const perms = u.permissions || roleDef.defaultPermissions || [];
+                              const isFull = perms.length >= SCREEN_PERMISSIONS.length || u.roleId === 'super_admin';
+                              return (
+                                <Box>
+                                  <Chip
+                                    size="small"
+                                    icon={<SecurityIcon sx={{ fontSize: '13px !important', color: `${roleDef.badgeColor.color} !important` }} />}
+                                    label={roleDef.name}
+                                    sx={{
+                                      fontWeight: 800,
+                                      fontSize: '0.725rem',
+                                      bgcolor: roleDef.badgeColor.bg,
+                                      color: roleDef.badgeColor.color,
+                                      border: `1px solid ${roleDef.badgeColor.border}`,
+                                      mb: 0.3
+                                    }}
+                                  />
+                                  <Typography variant="caption" sx={{ display: 'block', color: '#64748b', fontSize: '0.675rem', fontWeight: 600 }}>
+                                    {isFull ? 'Full Access (All Modules)' : `${perms.length}/${SCREEN_PERMISSIONS.length} Modules Permitted`}
+                                  </Typography>
+                                </Box>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>
                             <Chip
@@ -577,15 +691,63 @@ export const Users: React.FC = () => {
                 <Select
                   label="Security Role"
                   value={createFormData.roleId}
-                  onChange={(e) => setCreateFormData({ ...createFormData, roleId: e.target.value })}
+                  onChange={(e) => {
+                    const newRole = e.target.value;
+                    setCreateFormData({
+                      ...createFormData,
+                      roleId: newRole,
+                      permissions: ROLE_DEFINITIONS[newRole]?.defaultPermissions || []
+                    });
+                  }}
                 >
-                  <MenuItem value="tenant_admin">Tenant Admin (Full Plant Management)</MenuItem>
-                  <MenuItem value="plant_manager">Plant Manager</MenuItem>
-                  <MenuItem value="supervisor">Supervisor</MenuItem>
-                  <MenuItem value="operator">Operator</MenuItem>
-                  <MenuItem value="viewer">Viewer (Read Only)</MenuItem>
+                  {isSuperAdmin && (
+                    <MenuItem value="super_admin">
+                      <Box sx={{ py: 0.5 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: '#dc2626' }}>
+                          Super Admin
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#64748b', display: 'block' }}>
+                          {ROLE_DEFINITIONS.super_admin.description}
+                        </Typography>
+                      </Box>
+                    </MenuItem>
+                  )}
+                  {Object.entries(ROLE_DEFINITIONS)
+                    .filter(([key]) => key !== 'super_admin')
+                    .map(([key, def]) => (
+                      <MenuItem key={key} value={key}>
+                        <Box sx={{ py: 0.5 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: def.badgeColor.color }}>
+                            {def.name}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: '#64748b', display: 'block' }}>
+                            {def.description}
+                          </Typography>
+                        </Box>
+                      </MenuItem>
+                    ))}
                 </Select>
               </FormControl>
+
+              {/* Selected Role Overview Box */}
+              {createRoleDef && (
+                <Box
+                  sx={{
+                    p: 1.5,
+                    borderRadius: '10px',
+                    bgcolor: createRoleDef.badgeColor.bg,
+                    border: `1px solid ${createRoleDef.badgeColor.border}`,
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: createRoleDef.badgeColor.color, display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                    <SecurityIcon sx={{ fontSize: 16 }} />
+                    {createRoleDef.name} Role Profile
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#334155', display: 'block', mt: 0.3 }}>
+                    {createRoleDef.description}
+                  </Typography>
+                </Box>
+              )}
 
               <FormControl fullWidth size="small" required>
                 <InputLabel>Company Access</InputLabel>
@@ -601,9 +763,24 @@ export const Users: React.FC = () => {
               </FormControl>
 
               <Box>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', display: 'block', mb: 1 }}>
-                  Screen Access Permissions
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
+                    Screen Access Permissions
+                  </Typography>
+                  <Button
+                    size="small"
+                    startIcon={<RestartAltIcon sx={{ fontSize: 14 }} />}
+                    onClick={() => {
+                      setCreateFormData(prev => ({
+                        ...prev,
+                        permissions: ROLE_DEFINITIONS[prev.roleId]?.defaultPermissions || []
+                      }));
+                    }}
+                    sx={{ fontSize: '0.72rem', textTransform: 'none', py: 0.2, px: 1, color: '#6366f1' }}
+                  >
+                    Reset to Role Defaults
+                  </Button>
+                </Box>
                 <FormGroup sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 0.5 }}>
                   {SCREEN_PERMISSIONS.map((perm) => (
                     <FormControlLabel
@@ -661,15 +838,63 @@ export const Users: React.FC = () => {
                 <Select
                   label="Security Role"
                   value={editFormData.roleId}
-                  onChange={(e) => setEditFormData({ ...editFormData, roleId: e.target.value })}
+                  onChange={(e) => {
+                    const newRole = e.target.value;
+                    setEditFormData({
+                      ...editFormData,
+                      roleId: newRole,
+                      permissions: ROLE_DEFINITIONS[newRole]?.defaultPermissions || editFormData.permissions
+                    });
+                  }}
                 >
-                  <MenuItem value="tenant_admin">Tenant Admin</MenuItem>
-                  <MenuItem value="plant_manager">Plant Manager</MenuItem>
-                  <MenuItem value="supervisor">Supervisor</MenuItem>
-                  <MenuItem value="operator">Operator</MenuItem>
-                  <MenuItem value="viewer">Viewer</MenuItem>
+                  {isSuperAdmin && (
+                    <MenuItem value="super_admin">
+                      <Box sx={{ py: 0.5 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: '#dc2626' }}>
+                          Super Admin
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#64748b', display: 'block' }}>
+                          {ROLE_DEFINITIONS.super_admin.description}
+                        </Typography>
+                      </Box>
+                    </MenuItem>
+                  )}
+                  {Object.entries(ROLE_DEFINITIONS)
+                    .filter(([key]) => key !== 'super_admin')
+                    .map(([key, def]) => (
+                      <MenuItem key={key} value={key}>
+                        <Box sx={{ py: 0.5 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: def.badgeColor.color }}>
+                            {def.name}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: '#64748b', display: 'block' }}>
+                            {def.description}
+                          </Typography>
+                        </Box>
+                      </MenuItem>
+                    ))}
                 </Select>
               </FormControl>
+
+              {/* Edit Role Overview Box */}
+              {editRoleDef && (
+                <Box
+                  sx={{
+                    p: 1.5,
+                    borderRadius: '10px',
+                    bgcolor: editRoleDef.badgeColor.bg,
+                    border: `1px solid ${editRoleDef.badgeColor.border}`,
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: editRoleDef.badgeColor.color, display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                    <SecurityIcon sx={{ fontSize: 16 }} />
+                    {editRoleDef.name} Role Profile
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#334155', display: 'block', mt: 0.3 }}>
+                    {editRoleDef.description}
+                  </Typography>
+                </Box>
+              )}
 
               <FormControl fullWidth size="small" required>
                 <InputLabel>Company Access</InputLabel>
@@ -697,9 +922,24 @@ export const Users: React.FC = () => {
               </FormControl>
 
               <Box>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', display: 'block', mb: 1 }}>
-                  Screen Access Permissions
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
+                    Screen Access Permissions
+                  </Typography>
+                  <Button
+                    size="small"
+                    startIcon={<RestartAltIcon sx={{ fontSize: 14 }} />}
+                    onClick={() => {
+                      setEditFormData(prev => ({
+                        ...prev,
+                        permissions: ROLE_DEFINITIONS[prev.roleId]?.defaultPermissions || []
+                      }));
+                    }}
+                    sx={{ fontSize: '0.72rem', textTransform: 'none', py: 0.2, px: 1, color: '#6366f1' }}
+                  >
+                    Reset to Role Defaults
+                  </Button>
+                </Box>
                 <FormGroup sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 0.5 }}>
                   {SCREEN_PERMISSIONS.map((perm) => (
                     <FormControlLabel

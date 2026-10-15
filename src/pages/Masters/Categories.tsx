@@ -54,8 +54,8 @@ import * as XLSX from 'xlsx';
 
 export const Categories: React.FC = () => {
   const queryClient = useQueryClient();
-  const { tenant, profile } = useAuthStore();
-  const tenantId = tenant?.id || '';
+  const { profile } = useAuthStore();
+  const tenantId = 'rileys';
   const userId = profile?.id || '';
   const userName = profile?.name || '';
 
@@ -367,10 +367,13 @@ export const Categories: React.FC = () => {
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 1 }}>
             <CategoryIcon sx={{ color: '#6366f1' }} />
-            Category Definitions Master
+            Riley's Category Master
+          </Typography>
+          <Typography variant="body2" sx={{ color: '#64748b', mt: 0.3, fontWeight: 500 }}>
+            Product categories and downtime classification categories for Riley's Plant Operations.
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1.5}>
+        <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
           <Button
             variant="outlined"
             startIcon={<FileDownloadIcon />}
