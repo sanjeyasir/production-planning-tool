@@ -1,4 +1,4 @@
-import { db } from '../firebase';
+import { db, storage } from '../firebase';
 import { 
   collection, 
   doc, 
@@ -14,6 +14,7 @@ import {
   limit,
   Timestamp 
 } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 // Helper to convert Firestore timestamps to JS Dates
 export const formatDoc = <T>(docSnap: any): T => {
@@ -353,6 +354,7 @@ export interface Section {
   sectionCode: string;
   sectionName: string;
   description?: string;
+  downtimeCategoryIds?: string[];
   status: 'ACTIVE' | 'INACTIVE';
   createdAt: Date;
 }
@@ -368,6 +370,7 @@ export const createSection = async (data: Omit<Section, 'id' | 'createdAt'>) => 
     sectionCode: data.sectionCode ? data.sectionCode.trim().toUpperCase() : '',
     sectionName: data.sectionName.trim(),
     description: data.description ? data.description.trim() : '',
+    downtimeCategoryIds: data.downtimeCategoryIds || [],
     status: data.status || 'ACTIVE',
     createdAt: new Date()
   });
@@ -385,6 +388,9 @@ export const updateSection = async (id: string, data: Partial<Omit<Section, 'id'
   }
   if (data.description !== undefined) {
     updateData.description = data.description.trim();
+  }
+  if (data.downtimeCategoryIds !== undefined) {
+    updateData.downtimeCategoryIds = data.downtimeCategoryIds;
   }
   await updateDoc(docRef, updateData);
 };
@@ -571,7 +577,9 @@ export interface ProductionOrder {
   tenantId: string;
   orderNumber: string;
   productName: string;
-  categoryId: string;
+  categoryId?: string;
+  sectionId?: string; // Associated Toyo section ID
+  sectionName?: string; // Associated Toyo section name
   quantity: number;
   dueDate: Date;
   status: 'PENDING' | 'DRAFT_PLANNED' | 'SCHEDULED' | 'COMPLETED';
@@ -909,6 +917,46 @@ export const deleteDailyProduction = async (id: string) => {
   await deleteDoc(docRef);
 };
 
+// ----------------------------------------------------
+// TARGET UNMET REASONS (Hourly reasons why daily target was not met)
+// ----------------------------------------------------
+export interface TargetUnmetReason {
+  id: string;
+  tenantId: string;
+  planId: string;
+  orderId?: string;
+  orderNumber?: string;
+  productName?: string;
+  machineId?: string;
+  machineCode?: string;
+  dateStr: string; // YYYY-MM-DD
+  hour: string; // e.g. "09:00 - 10:00" or "Hour 2"
+  reason: string;
+  lostUnits?: number;
+  enteredBy?: string;
+  enteredByEmail?: string;
+  createdAt: Date;
+}
+
+export const getTargetUnmetReasons = async (tenantId: string): Promise<TargetUnmetReason[]> => {
+  return listTenantCollection<TargetUnmetReason>('target_unmet_reasons', tenantId);
+};
+
+export const createTargetUnmetReason = async (data: Omit<TargetUnmetReason, 'id' | 'createdAt'>) => {
+  const colRef = collection(db, 'target_unmet_reasons');
+  const docRef = await addDoc(colRef, {
+    ...data,
+    lostUnits: Number(data.lostUnits || 0),
+    createdAt: new Date()
+  });
+  return docRef.id;
+};
+
+export const deleteTargetUnmetReason = async (id: string) => {
+  const docRef = doc(db, 'target_unmet_reasons', id);
+  await deleteDoc(docRef);
+};
+
 // Legacy compatibility shim for hourly productions if referenced elsewhere
 export interface HourlyProduction {
   id: string;
@@ -943,6 +991,7 @@ export const clearTenantTransactionalData = async (tenantId: string) => {
     'production_plans',
     'hourly_production',
     'daily_production',
+    'target_unmet_reasons',
     'production_records',
     'downtime_records',
   ];
@@ -973,5 +1022,69 @@ export const clearTenantTransactionalData = async (tenantId: string) => {
   results['production_orders_reset'] = orderCount;
 
   return results;
+};
+
+// ----------------------------------------------------
+// MONTHLY ARCHIVES (Cloud Storage & Metadata)
+// ----------------------------------------------------
+export interface MonthlyArchive {
+  id: string;
+  tenantId: string;
+  year: number;
+  month: number;
+  monthKey: string; // YYYY-MM
+  monthLabel: string; // e.g. "September 2026"
+  fileName: string;
+  fileUrl: string;
+  storagePath: string;
+  orderCount: number;
+  scheduleCount: number;
+  totalPlannedVolume: number;
+  totalActualVolume: number;
+  variance: number;
+  targetMetPercent: number;
+  unmetReasonsCount: number;
+  createdAt: Date;
+  createdBy: string;
+}
+
+export const getMonthlyArchives = async (tenantId: string): Promise<MonthlyArchive[]> => {
+  return listTenantCollection<MonthlyArchive>('monthly_archives', tenantId);
+};
+
+export const createMonthlyArchive = async (data: Omit<MonthlyArchive, 'id' | 'createdAt'>) => {
+  const colRef = collection(db, 'monthly_archives');
+  const docRef = await addDoc(colRef, {
+    ...data,
+    createdAt: new Date()
+  });
+  return docRef.id;
+};
+
+export const deleteMonthlyArchive = async (id: string, storagePath?: string) => {
+  if (storagePath) {
+    try {
+      const storageRef = ref(storage, storagePath);
+      await deleteObject(storageRef);
+    } catch (err) {
+      console.warn('Storage file delete ignored or already removed:', err);
+    }
+  }
+  const docRef = doc(db, 'monthly_archives', id);
+  await deleteDoc(docRef);
+};
+
+export const uploadArchiveExcelToStorage = async (
+  tenantId: string,
+  fileName: string,
+  blob: Blob
+): Promise<{ fileUrl: string; storagePath: string }> => {
+  const storagePath = `archives/${tenantId}/${fileName}`;
+  const storageRef = ref(storage, storagePath);
+  await uploadBytes(storageRef, blob, {
+    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
+  const fileUrl = await getDownloadURL(storageRef);
+  return { fileUrl, storagePath };
 };
 

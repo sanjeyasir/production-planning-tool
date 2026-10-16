@@ -54,6 +54,7 @@ import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturing';
 import LayersIcon from '@mui/icons-material/Layers';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 
 const DRAWER_WIDTH = 264;
 const COLLAPSED_DRAWER_WIDTH = 72;
@@ -75,7 +76,9 @@ export const Layout: React.FC = () => {
     setActiveCompany,
     getAvailableCompanies,
     canAccessCompany,
-    isAdmin
+    isAdmin,
+    activeMonthArchive,
+    setActiveMonthArchive
   } = useAuthStore();
   
   const availableCompanies = getAvailableCompanies();
@@ -112,6 +115,18 @@ export const Layout: React.FC = () => {
     month: 'short',
     day: 'numeric'
   });
+
+  const pastMonthsNavList = React.useMemo(() => {
+    const list: Array<{ key: string; label: string }> = [];
+    const base = new Date();
+    for (let i = 1; i <= 4; i++) {
+      const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const l = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      list.push({ key: k, label: l });
+    }
+    return list;
+  }, []);
 
   const menuItems = [
     {
@@ -165,6 +180,13 @@ export const Layout: React.FC = () => {
     {
       title: 'Analytics & Reports',
       subheader: true,
+    },
+    {
+      title: 'Monthly Reports & Archives',
+      path: '/monthly-reports',
+      icon: <AssessmentIcon fontSize="small" />,
+      module: 'production',
+      action: 'view',
     },
     {
       title: 'Production Analytics',
@@ -570,6 +592,53 @@ export const Layout: React.FC = () => {
                 display: { xs: 'none', sm: 'inline-flex' }
               }}
             />
+
+            {/* Operations Period / Past Month Archive Toggle */}
+            <FormControl size="small" sx={{ minWidth: { xs: 120, sm: 175 } }}>
+              <Select
+                value={activeMonthArchive || 'CURRENT'}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'VIEW_ALL_REPORTS') {
+                    navigate('/monthly-reports');
+                  } else if (val === 'CURRENT') {
+                    setActiveMonthArchive(null);
+                  } else {
+                    setActiveMonthArchive(val);
+                    navigate('/monthly-reports');
+                  }
+                }}
+                sx={{
+                  height: 34,
+                  borderRadius: '9px',
+                  bgcolor: activeMonthArchive ? '#fffbeb' : '#ffffff',
+                  fontWeight: 800,
+                  fontSize: '0.75rem',
+                  border: activeMonthArchive ? '1.5px solid #f59e0b' : '1px solid #cbd5e1',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                  '& .MuiSelect-select': {
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.8,
+                    py: 0.5,
+                    px: 1.2,
+                  }
+                }}
+              >
+                <MenuItem value="CURRENT" sx={{ fontWeight: 700, fontSize: '0.78rem' }}>
+                  ⚡ Live Operations
+                </MenuItem>
+                {pastMonthsNavList.map((m) => (
+                  <MenuItem key={m.key} value={m.key} sx={{ fontWeight: 600, fontSize: '0.78rem' }}>
+                    🗄️ Past: {m.label}
+                  </MenuItem>
+                ))}
+                <Divider sx={{ my: 0.5 }} />
+                <MenuItem value="VIEW_ALL_REPORTS" sx={{ fontWeight: 800, fontSize: '0.78rem', color: '#4f46e5' }}>
+                  📊 Monthly Reports & Archives...
+                </MenuItem>
+              </Select>
+            </FormControl>
 
             {/* Company Selection Dropdown: Admin views all, Role-based views respective */}
             <FormControl size="small" sx={{ minWidth: { xs: 110, sm: 160 } }}>

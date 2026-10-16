@@ -56,7 +56,8 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Tooltip
+  Tooltip,
+  InputAdornment
 } from '@mui/material';
 
 // Icons
@@ -80,6 +81,7 @@ import EventBusyIcon from '@mui/icons-material/EventBusy';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import TuneIcon from '@mui/icons-material/Tune';
 import BlockIcon from '@mui/icons-material/Block';
+import SearchIcon from '@mui/icons-material/Search';
 
 // Handsontable
 import { HotTable } from '@handsontable/react';
@@ -100,7 +102,8 @@ export interface TentativeAllocation {
   orderId: string;
   orderNumber: string;
   productName: string;
-  categoryId: string;
+  categoryId?: string;
+  sectionId?: string;
   machineId: string;
   machineCode: string;
   dateStr: string; // YYYY-MM-DD
@@ -194,7 +197,52 @@ export const ScheduleCreation: React.FC = () => {
 
   // ----------------------------------------------------
   // STATE
-  // ----------------------------------------------------
+  // Helper date ranges for filter presets
+  const getThisWeekRange = () => {
+    const now = new Date();
+    const day = now.getDay();
+    const diffToMon = now.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(now.getFullYear(), now.getMonth(), diffToMon);
+    const sunday = new Date(now.getFullYear(), now.getMonth(), diffToMon + 6);
+    return {
+      start: toLocalDateString(monday),
+      end: toLocalDateString(sunday)
+    };
+  };
+
+  const getThisMonthRange = () => {
+    const now = new Date();
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return {
+      start: toLocalDateString(first),
+      end: toLocalDateString(last)
+    };
+  };
+
+  // Orders Directory Filter State (matches ProductionOrders view)
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState('all');
+  const [orderDatePreset, setOrderDatePreset] = useState<'CURRENT_WEEK' | 'THIS_MONTH' | 'ALL_TIME' | 'CUSTOM'>('ALL_TIME');
+  const [orderFromDate, setOrderFromDate] = useState<string>('');
+  const [orderToDate, setOrderToDate] = useState<string>('');
+
+  const handleApplyOrderPreset = (preset: 'CURRENT_WEEK' | 'THIS_MONTH' | 'ALL_TIME') => {
+    setOrderDatePreset(preset);
+    if (preset === 'CURRENT_WEEK') {
+      const range = getThisWeekRange();
+      setOrderFromDate(range.start);
+      setOrderToDate(range.end);
+    } else if (preset === 'THIS_MONTH') {
+      const range = getThisMonthRange();
+      setOrderFromDate(range.start);
+      setOrderToDate(range.end);
+    } else if (preset === 'ALL_TIME') {
+      setOrderFromDate('');
+      setOrderToDate('');
+    }
+  };
+
   // Timeline Window
   const [windowStartDate, setWindowStartDate] = useState<string>(toLocalDateString(new Date()));
   const [horizonDays, setHorizonDays] = useState<number>(7);
@@ -710,10 +758,32 @@ export const ScheduleCreation: React.FC = () => {
     return map;
   }, [orders, totalOrderAllocatedMap, existingPlans]);
 
-  // Orders Directory for Handsontable (Shows all registered orders)
+  // Orders Directory for Handsontable (Filtered by date range, status, and search)
   const pendingOrders = useMemo(() => {
-    return orders;
-  }, [orders]);
+    return orders.filter(o => {
+      // 1. Search filter
+      if (orderSearch.trim()) {
+        const q = orderSearch.trim().toLowerCase();
+        const matchNum = (o.orderNumber || '').toLowerCase().includes(q);
+        const matchProd = (o.productName || '').toLowerCase().includes(q);
+        if (!matchNum && !matchProd) return false;
+      }
+
+      // 2. Status filter
+      if (orderStatusFilter !== 'all') {
+        if (o.status !== orderStatusFilter) return false;
+      }
+
+      // 3. Date Range Filter on expected delivery date (dueDate)
+      if (orderFromDate || orderToDate) {
+        const dueStr = toLocalDateString(o.dueDate);
+        if (orderFromDate && dueStr < orderFromDate) return false;
+        if (orderToDate && dueStr > orderToDate) return false;
+      }
+
+      return true;
+    });
+  }, [orders, orderSearch, orderStatusFilter, orderFromDate, orderToDate]);
 
   // Handsontable Data Format
   const hotOrdersData = useMemo(() => {
@@ -731,7 +801,7 @@ export const ScheduleCreation: React.FC = () => {
           }
         }
       } else {
-        groupLabel = categoryMap[o.categoryId] || 'General';
+        groupLabel = (o.categoryId && categoryMap[o.categoryId]) || 'General';
       }
 
       const targetQty = getOrderTargetVolume(o, existingPlans);
@@ -1061,7 +1131,8 @@ export const ScheduleCreation: React.FC = () => {
         orderId: rangePlanOrder.id,
         orderNumber: rangePlanOrder.orderNumber,
         productName: rangePlanOrder.productName,
-        categoryId: rangePlanOrder.categoryId,
+        categoryId: rangePlanOrder.categoryId || '',
+        sectionId: (rangePlanOrder as any).sectionId || '',
         machineId: machineObj.id,
         machineCode: machineObj.machineCode,
         dateStr,
@@ -1168,7 +1239,8 @@ export const ScheduleCreation: React.FC = () => {
       orderId: orderObj.id,
       orderNumber: orderObj.orderNumber,
       productName: orderObj.productName,
-      categoryId: orderObj.categoryId,
+      categoryId: orderObj.categoryId || '',
+      sectionId: (orderObj as any).sectionId || '',
       machineId: slotModal.machine.id,
       machineCode: slotModal.machine.machineCode,
       dateStr: slotModal.dateStr,
@@ -1509,7 +1581,7 @@ export const ScheduleCreation: React.FC = () => {
                 1. Select Production Orders to Schedule
               </Typography>
               <Typography variant="caption" sx={{ color: '#64748b' }}>
-                Review auto-calculated unallocated remaining volume. Click "Multi-Machine Plan" to select multiple lines & date range, or "Select" to allocate into specific machine slots below.
+                Review auto-calculated unallocated remaining volume. Filter by expected delivery date or status, then click "Multi-Machine Plan" or "Select".
               </Typography>
             </Box>
 
@@ -1521,6 +1593,111 @@ export const ScheduleCreation: React.FC = () => {
                 sx={{ fontWeight: 700 }}
               />
             )}
+          </Box>
+
+          {/* Date Range & Status Filters Toolbar (Matches Production Orders View) */}
+          <Box sx={{ mb: 2, pb: 1.5, borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
+            <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+              {/* Presets */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, bgcolor: '#f8fafc', p: 0.5, borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, px: 0.8, fontSize: '0.72rem', textTransform: 'uppercase' }}>
+                  Exp. Delivery:
+                </Typography>
+                <Chip
+                  label="Current Week"
+                  size="small"
+                  clickable
+                  color={orderDatePreset === 'CURRENT_WEEK' ? 'primary' : 'default'}
+                  variant={orderDatePreset === 'CURRENT_WEEK' ? 'filled' : 'outlined'}
+                  onClick={() => handleApplyOrderPreset('CURRENT_WEEK')}
+                  sx={{ fontWeight: 700, fontSize: '0.75rem', height: '24px' }}
+                />
+                <Chip
+                  label="This Month"
+                  size="small"
+                  clickable
+                  color={orderDatePreset === 'THIS_MONTH' ? 'primary' : 'default'}
+                  variant={orderDatePreset === 'THIS_MONTH' ? 'filled' : 'outlined'}
+                  onClick={() => handleApplyOrderPreset('THIS_MONTH')}
+                  sx={{ fontWeight: 700, fontSize: '0.75rem', height: '24px' }}
+                />
+                <Chip
+                  label="All Time"
+                  size="small"
+                  clickable
+                  color={orderDatePreset === 'ALL_TIME' ? 'primary' : 'default'}
+                  variant={orderDatePreset === 'ALL_TIME' ? 'filled' : 'outlined'}
+                  onClick={() => handleApplyOrderPreset('ALL_TIME')}
+                  sx={{ fontWeight: 700, fontSize: '0.75rem', height: '24px' }}
+                />
+              </Box>
+
+              {/* From Date */}
+              <TextField
+                label="From (Exp. Delivery)"
+                type="date"
+                size="small"
+                value={orderFromDate}
+                onChange={(e) => {
+                  setOrderFromDate(e.target.value);
+                  setOrderDatePreset('CUSTOM');
+                }}
+                slotProps={{ inputLabel: { shrink: true } }}
+                sx={{ width: 170 }}
+              />
+
+              {/* To Date */}
+              <TextField
+                label="To (Exp. Delivery)"
+                type="date"
+                size="small"
+                value={orderToDate}
+                onChange={(e) => {
+                  setOrderToDate(e.target.value);
+                  setOrderDatePreset('CUSTOM');
+                }}
+                slotProps={{ inputLabel: { shrink: true } }}
+                sx={{ width: 170 }}
+              />
+
+              {/* Status Filter */}
+              <FormControl size="small" sx={{ width: 160 }}>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  label="Status"
+                  value={orderStatusFilter}
+                  onChange={(e) => setOrderStatusFilter(e.target.value)}
+                >
+                  <MenuItem value="all">All Statuses</MenuItem>
+                  <MenuItem value="PENDING">Pending Planning</MenuItem>
+                  <MenuItem value="DRAFT_PLANNED">Draft Planned</MenuItem>
+                  <MenuItem value="SCHEDULED">Confirmed Scheduled</MenuItem>
+                  <MenuItem value="COMPLETED">Completed</MenuItem>
+                </Select>
+              </FormControl>
+
+              {/* Search */}
+              <TextField
+                placeholder="Search order or product..."
+                size="small"
+                sx={{ width: { xs: '100%', sm: 210 } }}
+                value={orderSearch}
+                onChange={(e) => setOrderSearch(e.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ color: '#94a3b8', fontSize: 18 }} />
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+            </Stack>
+
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>
+              Showing {pendingOrders.length} of {orders.length} orders
+            </Typography>
           </Box>
 
           {/* Handsontable Grid */}

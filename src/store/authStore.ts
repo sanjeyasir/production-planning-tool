@@ -63,6 +63,7 @@ interface AuthState {
   role: RoleProfile | null;
   loading: boolean;
   activeCompany: CompanyId;
+  activeMonthArchive: string | null; // e.g. "2026-09" or null for current operations
   
   setAuth: (
     user: FirebaseUser | null,
@@ -73,6 +74,7 @@ interface AuthState {
   setLoading: (loading: boolean) => void;
   clearAuth: () => void;
   setActiveCompany: (company: CompanyId) => void;
+  setActiveMonthArchive: (monthKey: string | null) => void;
   getAvailableCompanies: () => CompanyInfo[];
   canAccessCompany: (company: CompanyId) => boolean;
   hasPermission: (module: string, action: string) => boolean;
@@ -86,6 +88,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   role: null,
   loading: true,
   activeCompany: 'rileys',
+  activeMonthArchive: null,
 
   setAuth: (user, profile, tenant, role) => {
     // Determine initial active company
@@ -153,6 +156,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       activeCompany: company,
       tenant: updatedTenant 
     });
+  },
+
+  setActiveMonthArchive: (monthKey: string | null) => {
+    set({ activeMonthArchive: monthKey });
   },
 
   isAdmin: () => {

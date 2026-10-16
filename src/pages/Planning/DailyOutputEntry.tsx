@@ -8,6 +8,9 @@ import {
   getDailyProductions,
   createDailyProduction,
   deleteDailyProduction,
+  getTargetUnmetReasons,
+  createTargetUnmetReason,
+  deleteTargetUnmetReason,
   toLocalDateString,
   parseLocalDate,
   type ProductionPlan
@@ -26,7 +29,24 @@ import {
   Chip,
   Paper,
   CircularProgress,
-  LinearProgress
+  LinearProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  TableContainer,
+  IconButton,
+  Tooltip,
+  InputAdornment
 } from '@mui/material';
 
 // Icons
@@ -36,15 +56,41 @@ import DownloadIcon from '@mui/icons-material/Download';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import TableViewIcon from '@mui/icons-material/TableView';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
+import ReportProblemIcon from '@mui/icons-material/ReportProblem';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import AddIcon from '@mui/icons-material/Add';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import SearchIcon from '@mui/icons-material/Search';
 
 // Handsontable
 import { HotTable } from '@handsontable/react';
 import * as XLSX from 'xlsx';
 
+const HOURLY_TIME_SLOTS = [
+  '06:00 - 07:00',
+  '07:00 - 08:00',
+  '08:00 - 09:00',
+  '09:00 - 10:00',
+  '10:00 - 11:00',
+  '11:00 - 12:00',
+  '12:00 - 13:00',
+  '13:00 - 14:00',
+  '14:00 - 15:00',
+  '15:00 - 16:00',
+  '16:00 - 17:00',
+  '17:00 - 18:00',
+  '18:00 - 19:00',
+  '19:00 - 20:00',
+  '20:00 - 21:00',
+  '21:00 - 22:00',
+  'Full Day / General Reason'
+];
+
 export const DailyOutputEntry: React.FC = () => {
   const queryClient = useQueryClient();
-  const { user, profile, tenant } = useAuthStore();
-  const tenantId = tenant?.id || '';
+  const { user, profile, tenant, activeCompany } = useAuthStore();
+  const tenantId = activeCompany || tenant?.id || 'rileys';
   const operatorName = profile?.name || user?.displayName || profile?.email || user?.email || 'Operator';
 
   // ----------------------------------------------------
@@ -56,6 +102,37 @@ export const DailyOutputEntry: React.FC = () => {
 
   // Selected Active Job from Horizontal Overflow Row (null means All Jobs)
   const [selectedJobKey, setSelectedJobKey] = useState<string | null>(null);
+
+  // Search filter for Unmet Reasons Monitoring table
+  const [unmetSearchQuery, setUnmetSearchQuery] = useState('');
+
+  // ----------------------------------------------------
+  // MODAL STATE: Target Unmet Reasons for Specific Order Schedule
+  // ----------------------------------------------------
+  const [unmetModal, setUnmetModal] = useState<{
+    open: boolean;
+    job: {
+      planId: string;
+      orderId: string;
+      orderNumber: string;
+      productName: string;
+      machineId: string;
+      machineCode: string;
+      machineName: string;
+      dateStr: string;
+      targetVolume: number;
+      actualProduced: number;
+    } | null;
+  }>({
+    open: false,
+    job: null
+  });
+
+  const [unmetForm, setUnmetForm] = useState({
+    hour: '08:00 - 09:00',
+    reason: '',
+    lostUnits: '' as number | ''
+  });
 
   // ----------------------------------------------------
   // QUERIES
@@ -81,6 +158,12 @@ export const DailyOutputEntry: React.FC = () => {
   const { data: dailyLogs = [], isLoading: loadingDailyLogs } = useQuery({
     queryKey: ['dailyProductions', tenantId],
     queryFn: () => getDailyProductions(tenantId),
+    enabled: !!tenantId,
+  });
+
+  const { data: unmetReasons = [], isLoading: loadingUnmetReasons } = useQuery({
+    queryKey: ['targetUnmetReasons', tenantId],
+    queryFn: () => getTargetUnmetReasons(tenantId),
     enabled: !!tenantId,
   });
 
@@ -219,6 +302,11 @@ export const DailyOutputEntry: React.FC = () => {
     return activeScheduledJobs.find(j => j.key === selectedJobKey) || null;
   }, [selectedJobKey, activeScheduledJobs]);
 
+  // Count helper for unmet reasons on a specific schedule
+  const getScheduleUnmetCount = (planId: string, dateStr: string) => {
+    return unmetReasons.filter(r => r.planId === planId && r.dateStr === dateStr).length;
+  };
+
   // ----------------------------------------------------
   // INLINE ENTRY FORM STATE (Bound to Active Selected Job)
   // ----------------------------------------------------
@@ -243,7 +331,7 @@ export const DailyOutputEntry: React.FC = () => {
   }, [activeJob?.key, activeJob?.targetVolume, activeJob?.actualProduced]);
 
   // ----------------------------------------------------
-  // MUTATIONS: CREATE & DELETE LOGS
+  // MUTATIONS: CREATE & DELETE OUTPUT LOGS
   // ----------------------------------------------------
   const saveOutputMutation = useMutation({
     mutationFn: async () => {
@@ -296,6 +384,54 @@ export const DailyOutputEntry: React.FC = () => {
   });
 
   // ----------------------------------------------------
+  // MUTATIONS: CREATE & DELETE TARGET UNMET REASONS
+  // ----------------------------------------------------
+  const saveUnmetReasonMutation = useMutation({
+    mutationFn: async () => {
+      if (!unmetModal.job) throw new Error('No order schedule selected.');
+      if (!unmetForm.hour.trim()) throw new Error('Please select or specify the hour.');
+      if (!unmetForm.reason.trim()) throw new Error('Please enter the reason for unmet target.');
+
+      await createTargetUnmetReason({
+        tenantId,
+        planId: unmetModal.job.planId,
+        orderId: unmetModal.job.orderId,
+        orderNumber: unmetModal.job.orderNumber,
+        productName: unmetModal.job.productName,
+        machineId: unmetModal.job.machineId,
+        machineCode: unmetModal.job.machineCode,
+        dateStr: unmetModal.job.dateStr,
+        hour: unmetForm.hour.trim(),
+        reason: unmetForm.reason.trim(),
+        lostUnits: Number(unmetForm.lostUnits || 0),
+        enteredBy: operatorName,
+        enteredByEmail: profile?.email || user?.email || ''
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['targetUnmetReasons', tenantId] });
+      setUnmetForm({
+        hour: '08:00 - 09:00',
+        reason: '',
+        lostUnits: ''
+      });
+      showToast('Unmet target reason logged successfully!', 'success');
+    },
+    onError: (err: any) => showToast(err.message, 'error')
+  });
+
+  const deleteUnmetReasonMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await deleteTargetUnmetReason(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['targetUnmetReasons', tenantId] });
+      showToast('Unmet target reason entry deleted.', 'info');
+    },
+    onError: (err: any) => showToast('Failed to delete entry: ' + err.message, 'error')
+  });
+
+  // ----------------------------------------------------
   // FILTERED DAILY LOGS FOR HANDSONTABLE
   // ----------------------------------------------------
   const filteredDailyLogs = useMemo(() => {
@@ -314,7 +450,6 @@ export const DailyOutputEntry: React.FC = () => {
 
       return true;
     }).sort((a, b) => {
-      // Sort by newest createdAt or date descending
       const tA = a.createdAt ? new Date((a.createdAt as any).toDate ? (a.createdAt as any).toDate() : a.createdAt).getTime() : 0;
       const tB = b.createdAt ? new Date((b.createdAt as any).toDate ? (b.createdAt as any).toDate() : b.createdAt).getTime() : 0;
       return tB - tA;
@@ -359,8 +494,8 @@ export const DailyOutputEntry: React.FC = () => {
     });
   }, [filteredDailyLogs, plans, orders, machines]);
 
-  // Export to Excel
-  const handleExportExcel = () => {
+  // Export Output Logs to Excel
+  const handleExportLogsExcel = () => {
     const logsData = filteredDailyLogs.map(l => {
       const p = plans.find(plan => plan.id === l.planId);
       const o = orders.find(ord => ord.id === (l.orderId || p?.orderId));
@@ -391,6 +526,107 @@ export const DailyOutputEntry: React.FC = () => {
     showToast('Daily output logs exported to Excel!');
   };
 
+  // ----------------------------------------------------
+  // FILTERED UNMET REASONS FOR DAILY MONITORING LIST
+  // ----------------------------------------------------
+  const filteredUnmetReasons = useMemo(() => {
+    return unmetReasons.filter(r => {
+      // 1. Date Range Filter
+      if (fromDateStr && r.dateStr < fromDateStr) return false;
+      if (toDateStr && r.dateStr > toDateStr) return false;
+
+      // 2. Specific Job Selection Filter
+      if (activeJob) {
+        if (r.planId !== activeJob.planId) return false;
+        if (r.dateStr !== activeJob.dateStr) return false;
+      }
+
+      // 3. Search query
+      if (unmetSearchQuery.trim()) {
+        const q = unmetSearchQuery.trim().toLowerCase();
+        const matchReason = (r.reason || '').toLowerCase().includes(q);
+        const matchHour = (r.hour || '').toLowerCase().includes(q);
+        const matchOrder = (r.orderNumber || '').toLowerCase().includes(q);
+        const matchProduct = (r.productName || '').toLowerCase().includes(q);
+        const matchMachine = (r.machineCode || '').toLowerCase().includes(q);
+        if (!matchReason && !matchHour && !matchOrder && !matchProduct && !matchMachine) {
+          return false;
+        }
+      }
+
+      return true;
+    }).sort((a, b) => {
+      const tA = a.createdAt ? new Date((a.createdAt as any).toDate ? (a.createdAt as any).toDate() : a.createdAt).getTime() : 0;
+      const tB = b.createdAt ? new Date((b.createdAt as any).toDate ? (b.createdAt as any).toDate() : b.createdAt).getTime() : 0;
+      return tB - tA;
+    });
+  }, [unmetReasons, fromDateStr, toDateStr, activeJob, unmetSearchQuery]);
+
+  // Export Target Unmet Reasons to Excel
+  const handleExportUnmetExcel = () => {
+    if (filteredUnmetReasons.length === 0) return;
+    const data = filteredUnmetReasons.map((r, idx) => ({
+      '#': idx + 1,
+      'Production Date': r.dateStr,
+      'Hour Slot': r.hour,
+      'Order Number': r.orderNumber || '—',
+      'Product Name': r.productName || '—',
+      'Machine Line': r.machineCode || '—',
+      'Reason for Target Not Met': r.reason,
+      'Estimated Lost Units': r.lostUnits || 0,
+      'Logged By': r.enteredBy || r.enteredByEmail || 'Operator',
+      'Logged Timestamp': formatTimestamp(r.createdAt)
+    }));
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), 'Target Unmet Reasons');
+    XLSX.writeFile(wb, `Target_Unmet_Reasons_${fromDateStr}_to_${toDateStr}.xlsx`);
+    showToast('Target unmet reasons exported to Excel!');
+  };
+
+  // Open modal for a specific job
+  const handleOpenUnmetModal = (job: any) => {
+    setUnmetModal({
+      open: true,
+      job: {
+        planId: job.planId,
+        orderId: job.orderId,
+        orderNumber: job.orderNumber,
+        productName: job.productName,
+        machineId: job.machineId,
+        machineCode: job.machineCode,
+        machineName: job.machineName,
+        dateStr: job.dateStr,
+        targetVolume: job.targetVolume,
+        actualProduced: job.actualProduced
+      }
+    });
+    setUnmetForm({
+      hour: '08:00 - 09:00',
+      reason: '',
+      lostUnits: ''
+    });
+  };
+
+  // Reasons specific to the job currently opened in modal
+  const modalJobReasons = useMemo(() => {
+    if (!unmetModal.job) return [];
+    return unmetReasons.filter(
+      r => r.planId === unmetModal.job?.planId && r.dateStr === unmetModal.job?.dateStr
+    ).sort((a, b) => {
+      const tA = a.createdAt ? new Date((a.createdAt as any).toDate ? (a.createdAt as any).toDate() : a.createdAt).getTime() : 0;
+      const tB = b.createdAt ? new Date((b.createdAt as any).toDate ? (b.createdAt as any).toDate() : b.createdAt).getTime() : 0;
+      return tB - tA;
+    });
+  }, [unmetReasons, unmetModal.job]);
+
+  const activeJobUnmetCount = activeJob ? getScheduleUnmetCount(activeJob.planId, activeJob.dateStr) : 0;
+
+  // Unmet summary totals
+  const totalLostUnitsDaily = useMemo(() => {
+    return filteredUnmetReasons.reduce((sum, r) => sum + (Number(r.lostUnits) || 0), 0);
+  }, [filteredUnmetReasons]);
+
   return (
     <Box sx={{ py: 1 }}>
       {/* HEADER WITH CONTROLS BAR: Date Range From & To, Preset Filters */}
@@ -399,6 +635,9 @@ export const DailyOutputEntry: React.FC = () => {
           <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 1 }}>
             <TrendingUpIcon sx={{ color: '#10b981', fontSize: 28 }} />
             Daily Production Output & Actuals Entry
+          </Typography>
+          <Typography variant="body2" sx={{ color: '#64748b', mt: 0.3, fontWeight: 500 }}>
+            {tenantId === 'toyo' ? 'Toyo Manufacturing' : "Riley's"} • Log hourly and daily outputs, target deviations, and reasons for targets not being met.
           </Typography>
         </Box>
 
@@ -434,10 +673,10 @@ export const DailyOutputEntry: React.FC = () => {
             size="small"
             variant="outlined"
             startIcon={<DownloadIcon />}
-            onClick={handleExportExcel}
+            onClick={handleExportLogsExcel}
             sx={{ borderRadius: '8px', fontWeight: 600, textTransform: 'none' }}
           >
-            Export Excel
+            Export Logs (Excel)
           </Button>
         </Stack>
       </Box>
@@ -477,7 +716,7 @@ export const DailyOutputEntry: React.FC = () => {
             </Grid>
 
             <Grid size={{ xs: 12, sm: 4, md: 6 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'flex-start', sm: 'flex-end' }, gap: 1.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'flex-start', sm: 'flex-end' }, gap: 1.5, flexWrap: 'wrap' }}>
                 <Chip
                   icon={<CalendarMonthIcon sx={{ fontSize: '15px !important' }} />}
                   label={`Showing: ${fromDateStr === toDateStr ? `Single Day (${fromDateStr})` : `${fromDateStr} → ${toDateStr}`}`}
@@ -489,6 +728,12 @@ export const DailyOutputEntry: React.FC = () => {
                   label={`${activeScheduledJobs.length} Planned Confirmed Job(s)`}
                   size="small"
                   sx={{ fontWeight: 700, bgcolor: '#dcfce7', color: '#166534' }}
+                />
+                <Chip
+                  icon={<WarningAmberIcon sx={{ fontSize: '15px !important' }} />}
+                  label={`${filteredUnmetReasons.length} Target Unmet Incident(s)`}
+                  size="small"
+                  sx={{ fontWeight: 700, bgcolor: '#fef3c7', color: '#92400e' }}
                 />
               </Box>
             </Grid>
@@ -504,7 +749,7 @@ export const DailyOutputEntry: React.FC = () => {
             Active Confirmed Schedules ({activeScheduledJobs.length})
           </Typography>
           <Typography variant="caption" sx={{ color: '#64748b' }}>
-            Click any scheduled job card to log output directly and filter logs history below.
+            Click card to log actuals, or click "Unmet Reasons" button to register reasons for target shortfalls.
           </Typography>
         </Box>
 
@@ -550,7 +795,10 @@ export const DailyOutputEntry: React.FC = () => {
                 All Date Range Logs
               </Typography>
               <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 0.5 }}>
-                {filteredDailyLogs.length} total entries recorded
+                {filteredDailyLogs.length} output logs recorded
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#d97706', display: 'block', mt: 0.3, fontWeight: 700 }}>
+                {filteredUnmetReasons.length} unmet incidents
               </Typography>
             </Box>
             <Box sx={{ mt: 1.5 }}>
@@ -566,14 +814,15 @@ export const DailyOutputEntry: React.FC = () => {
               const isSelected = selectedJobKey === job.key;
               const isComplete = job.actualProduced >= job.targetVolume;
               const progressPct = job.targetVolume > 0 ? Math.min(100, Math.round((job.actualProduced / job.targetVolume) * 100)) : 0;
+              const unmetCount = getScheduleUnmetCount(job.planId, job.dateStr);
 
               return (
                 <Paper
                   key={job.key}
                   onClick={() => setSelectedJobKey(job.key)}
                   sx={{
-                    minWidth: 260,
-                    maxWidth: 290,
+                    minWidth: 270,
+                    maxWidth: 300,
                     p: 1.8,
                     borderRadius: '12px',
                     border: isSelected ? '2px solid #10b981' : '1px solid #e2e8f0',
@@ -624,15 +873,45 @@ export const DailyOutputEntry: React.FC = () => {
                     </Box>
                   </Box>
 
-                  <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Chip
+                  <Box sx={{ mt: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.8 }}>
+                      <Chip
+                        size="small"
+                        label={`${job.logsCount} Log(s)`}
+                        sx={{ height: 18, fontSize: '0.62rem', fontWeight: 700, bgcolor: job.logsCount > 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)', color: job.logsCount > 0 ? '#059669' : '#d97706' }}
+                      />
+                      <Typography variant="caption" sx={{ fontWeight: 800, color: isSelected ? '#059669' : '#64748b', fontSize: '0.72rem' }}>
+                        {isSelected ? '✓ Selected' : 'Click to Log'}
+                      </Typography>
+                    </Box>
+
+                    {/* Dedicated Button to open Target Unmet Reasons Modal */}
+                    <Button
                       size="small"
-                      label={`${job.logsCount} Log Entry(ies)`}
-                      sx={{ height: 18, fontSize: '0.62rem', fontWeight: 700, bgcolor: job.logsCount > 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)', color: job.logsCount > 0 ? '#059669' : '#d97706' }}
-                    />
-                    <Typography variant="caption" sx={{ fontWeight: 800, color: isSelected ? '#059669' : '#64748b', fontSize: '0.72rem' }}>
-                      {isSelected ? '✓ Selected' : 'Click to Log'}
-                    </Typography>
+                      variant={unmetCount > 0 ? "contained" : "outlined"}
+                      startIcon={<ReportProblemIcon sx={{ fontSize: 13 }} />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenUnmetModal(job);
+                      }}
+                      sx={{
+                        width: '100%',
+                        borderRadius: '8px',
+                        fontSize: '0.7rem',
+                        textTransform: 'none',
+                        fontWeight: 700,
+                        py: 0.35,
+                        bgcolor: unmetCount > 0 ? '#f59e0b' : 'transparent',
+                        color: unmetCount > 0 ? '#ffffff' : '#b45309',
+                        borderColor: '#fde68a',
+                        '&:hover': {
+                          bgcolor: unmetCount > 0 ? '#d97706' : '#fffbeb',
+                          borderColor: '#f59e0b'
+                        }
+                      }}
+                    >
+                      Unmet Reasons {unmetCount > 0 ? `(${unmetCount})` : '+'}
+                    </Button>
                   </Box>
                 </Paper>
               );
@@ -662,11 +941,33 @@ export const DailyOutputEntry: React.FC = () => {
                 </Typography>
               </Box>
 
-              <Chip
-                label={`Remaining: ${(Math.max(0, activeJob.targetVolume - activeJob.actualProduced)).toLocaleString()} u`}
-                color="primary"
-                sx={{ fontWeight: 800 }}
-              />
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="warning"
+                  startIcon={<ReportProblemIcon sx={{ fontSize: 16 }} />}
+                  onClick={() => handleOpenUnmetModal(activeJob)}
+                  sx={{
+                    borderRadius: '8px',
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    fontSize: '0.75rem',
+                    borderColor: '#fde68a',
+                    bgcolor: '#fffbeb',
+                    color: '#b45309',
+                    '&:hover': { bgcolor: '#fef3c7', borderColor: '#f59e0b' }
+                  }}
+                >
+                  Target Unmet Reasons ({activeJobUnmetCount})
+                </Button>
+
+                <Chip
+                  label={`Remaining: ${(Math.max(0, activeJob.targetVolume - activeJob.actualProduced)).toLocaleString()} u`}
+                  color="primary"
+                  sx={{ fontWeight: 800 }}
+                />
+              </Stack>
             </Box>
 
             <form onSubmit={(e) => { e.preventDefault(); saveOutputMutation.mutate(); }}>
@@ -743,7 +1044,7 @@ export const DailyOutputEntry: React.FC = () => {
       )}
 
       {/* SECTION 3: VIEW-ONLY HANDSONTABLE OUTPUT LOGS HISTORY WITH TIMESTAMPS */}
-      <Card sx={{ borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+      <Card sx={{ mb: 3, borderRadius: '14px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
         <CardContent sx={{ p: 2.5 }}>
           <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
             <Box>
@@ -958,6 +1259,487 @@ export const DailyOutputEntry: React.FC = () => {
           </Box>
         </CardContent>
       </Card>
+
+      {/* SECTION 4: TARGET UNMET REASONS MONITORING LOG (DAILY SUMMARY) */}
+      <Card sx={{ borderRadius: '14px', border: '1px solid #fed7aa', bgcolor: '#ffffff', boxShadow: '0 2px 8px rgba(245, 158, 11, 0.08)' }}>
+        <CardContent sx={{ p: 2.5 }}>
+          {/* Header */}
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#9a3412', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <ReportProblemIcon sx={{ color: '#f59e0b' }} />
+                Target Unmet Reasons Monitoring Log ({filteredUnmetReasons.length} Incidents)
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#78350f' }}>
+                {activeJob
+                  ? `Filtered to selected job: ${activeJob.orderNumber} on ${activeJob.machineCode} (${activeJob.dateStr})`
+                  : `Daily log of all operational deviations and shortfall reasons for date range: ${fromDateStr} to ${toDateStr}`}
+              </Typography>
+            </Box>
+
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+              <TextField
+                size="small"
+                placeholder="Search reasons, orders, machines..."
+                value={unmetSearchQuery}
+                onChange={(e) => setUnmetSearchQuery(e.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" sx={{ color: '#94a3b8' }} />
+                      </InputAdornment>
+                    )
+                  }
+                }}
+                sx={{ bgcolor: '#ffffff', minWidth: 230 }}
+              />
+
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                onClick={handleExportUnmetExcel}
+                disabled={filteredUnmetReasons.length === 0}
+                sx={{
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  color: '#b45309',
+                  borderColor: '#fde68a',
+                  '&:hover': { bgcolor: '#fffbeb', borderColor: '#f59e0b' }
+                }}
+              >
+                Export Reasons
+              </Button>
+            </Stack>
+          </Box>
+
+          {/* Quick Metrics Bar */}
+          <Grid container spacing={2} sx={{ mb: 2.5 }}>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <Paper sx={{ p: 1.5, borderRadius: '10px', bgcolor: '#fffbeb', border: '1px solid #fde68a' }}>
+                <Typography variant="caption" sx={{ color: '#b45309', fontWeight: 700, textTransform: 'uppercase' }}>
+                  Total Incidents Logged
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: '#9a3412' }}>
+                  {filteredUnmetReasons.length} <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>hourly reason(s)</span>
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <Paper sx={{ p: 1.5, borderRadius: '10px', bgcolor: '#fef2f2', border: '1px solid #fecaca' }}>
+                <Typography variant="caption" sx={{ color: '#b91c1c', fontWeight: 700, textTransform: 'uppercase' }}>
+                  Total Estimated Lost Units
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: '#991b1b' }}>
+                  {totalLostUnitsDaily.toLocaleString()} <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>units lost</span>
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <Paper sx={{ p: 1.5, borderRadius: '10px', bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>
+                  Coverage Filter
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                  {fromDateStr === toDateStr ? fromDateStr : `${fromDateStr} → ${toDateStr}`}
+                </Typography>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          {/* Table Container */}
+          <TableContainer sx={{ border: '1px solid #fed7aa', borderRadius: '10px' }}>
+            <Table size="small">
+              <TableHead sx={{ bgcolor: '#fff7ed' }}>
+                <TableRow sx={{ '& th': { fontWeight: 800, color: '#7c2d12', py: 1.2, fontSize: '0.78rem' } }}>
+                  <TableCell sx={{ width: 45, textAlign: 'center' }}>#</TableCell>
+                  <TableCell sx={{ width: 110 }}>Date</TableCell>
+                  <TableCell sx={{ width: 130 }}>Hour Slot</TableCell>
+                  <TableCell sx={{ width: 130 }}>Order Number</TableCell>
+                  <TableCell sx={{ width: 160 }}>Product</TableCell>
+                  <TableCell sx={{ width: 110 }}>Machine</TableCell>
+                  <TableCell>Reason for Target Not Met</TableCell>
+                  <TableCell sx={{ width: 110, textAlign: 'right' }}>Lost Units</TableCell>
+                  <TableCell sx={{ width: 130 }}>Logged By</TableCell>
+                  <TableCell sx={{ width: 140 }}>Logged At</TableCell>
+                  <TableCell align="center" sx={{ width: 70 }}>Action</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {loadingUnmetReasons ? (
+                  <TableRow>
+                    <TableCell colSpan={11} align="center" sx={{ py: 5 }}>
+                      <CircularProgress size={26} sx={{ color: '#f59e0b', mb: 1 }} />
+                      <Typography variant="body2" sx={{ color: '#64748b' }}>
+                        Loading unmet target reasons...
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : filteredUnmetReasons.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={11} align="center" sx={{ py: 5, color: '#64748b' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#64748b' }}>
+                        No reasons logged for unmet targets in this date range.
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: '#94a3b8', mt: 0.5, display: 'block' }}>
+                        Click the "Unmet Reasons" button on any scheduled job card to register an incident.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredUnmetReasons.map((r, idx) => {
+                    return (
+                      <TableRow key={r.id} hover sx={{ '&:last-child td': { borderBottom: 0 } }}>
+                        <TableCell align="center" sx={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: 600 }}>
+                          {idx + 1}
+                        </TableCell>
+
+                        <TableCell sx={{ fontWeight: 600, color: '#334155', fontSize: '0.8rem' }}>
+                          {r.dateStr}
+                        </TableCell>
+
+                        <TableCell>
+                          <Chip
+                            icon={<ScheduleIcon sx={{ fontSize: '13px !important' }} />}
+                            label={r.hour}
+                            size="small"
+                            sx={{
+                              bgcolor: '#fef3c7',
+                              color: '#92400e',
+                              fontWeight: 700,
+                              fontSize: '0.72rem',
+                              borderRadius: '6px'
+                            }}
+                          />
+                        </TableCell>
+
+                        <TableCell sx={{ fontWeight: 700, color: '#0f172a', fontSize: '0.82rem' }}>
+                          {r.orderNumber || '—'}
+                        </TableCell>
+
+                        <TableCell sx={{ color: '#475569', fontSize: '0.8rem' }}>
+                          {r.productName || '—'}
+                        </TableCell>
+
+                        <TableCell sx={{ fontWeight: 700, color: '#4338ca', fontSize: '0.8rem' }}>
+                          {r.machineCode || '—'}
+                        </TableCell>
+
+                        <TableCell sx={{ fontWeight: 600, color: '#0f172a', fontSize: '0.82rem' }}>
+                          {r.reason}
+                        </TableCell>
+
+                        <TableCell align="right">
+                          {Number(r.lostUnits) > 0 ? (
+                            <Typography variant="caption" sx={{ color: '#dc2626', fontWeight: 800 }}>
+                              -{Number(r.lostUnits).toLocaleString()} u
+                            </Typography>
+                          ) : (
+                            <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                              —
+                            </Typography>
+                          )}
+                        </TableCell>
+
+                        <TableCell sx={{ fontSize: '0.78rem', color: '#475569' }}>
+                          {r.enteredBy || r.enteredByEmail || 'Operator'}
+                        </TableCell>
+
+                        <TableCell sx={{ fontSize: '0.75rem', color: '#64748b' }}>
+                          {formatTimestamp(r.createdAt)}
+                        </TableCell>
+
+                        <TableCell align="center">
+                          <Tooltip title="Delete Reason Entry">
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                if (confirm(`Delete unmet reason entry for ${r.hour} ("${r.reason}")?`)) {
+                                  deleteUnmetReasonMutation.mutate(r.id);
+                                }
+                              }}
+                            >
+                              <DeleteForeverIcon sx={{ fontSize: 17, color: '#ef4444' }} />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
+
+      {/* ---------------------------------------------------- */}
+      {/* MODAL: TARGET UNMET REASONS FOR SPECIFIC ORDER SCHEDULE */}
+      {/* ---------------------------------------------------- */}
+      <Dialog
+        open={unmetModal.open}
+        onClose={() => setUnmetModal({ open: false, job: null })}
+        maxWidth="md"
+        fullWidth
+        slotProps={{ paper: { sx: { borderRadius: '16px' } } }}
+      >
+        <DialogTitle sx={{ pb: 1, borderBottom: '1px solid #e2e8f0' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <ReportProblemIcon sx={{ color: '#f59e0b', fontSize: 24 }} />
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                  Target Unmet Reasons
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#64748b' }}>
+                  Log hourly reasons why the daily production target was not met for this specific order schedule.
+                </Typography>
+              </Box>
+            </Box>
+
+            {unmetModal.job && (
+              <Chip
+                label={unmetModal.job.dateStr}
+                size="small"
+                sx={{ bgcolor: '#e0e7ff', color: '#3730a3', fontWeight: 800 }}
+              />
+            )}
+          </Box>
+        </DialogTitle>
+
+        <DialogContent sx={{ pt: 2.5, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+          {/* Order Schedule Context Card */}
+          {unmetModal.job && (
+            <Paper sx={{ p: 2, borderRadius: '12px', bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+              <Grid container spacing={2} sx={{ alignItems: 'center' }}>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>
+                    Order Number
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                    {unmetModal.job.orderNumber}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#475569' }}>
+                    {unmetModal.job.productName}
+                  </Typography>
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>
+                    Machine Line
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#4f46e5' }}>
+                    {unmetModal.job.machineCode}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#64748b' }}>
+                    {unmetModal.job.machineName}
+                  </Typography>
+                </Grid>
+
+                <Grid size={{ xs: 6, sm: 3, md: 3 }}>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>
+                    Daily Target
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                    {unmetModal.job.targetVolume.toLocaleString()} u
+                  </Typography>
+                </Grid>
+
+                <Grid size={{ xs: 6, sm: 3, md: 3 }}>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>
+                    Actual Produced / Variance
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: unmetModal.job.actualProduced >= unmetModal.job.targetVolume ? '#16a34a' : '#dc2626' }}>
+                    {unmetModal.job.actualProduced.toLocaleString()} u{' '}
+                    <span style={{ fontSize: '0.72rem' }}>
+                      ({unmetModal.job.actualProduced - unmetModal.job.targetVolume >= 0 ? '+' : ''}
+                      {(unmetModal.job.actualProduced - unmetModal.job.targetVolume).toLocaleString()} u)
+                    </span>
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Paper>
+          )}
+
+          {/* Form to enter hour and reason */}
+          <Paper sx={{ p: 2.2, borderRadius: '12px', border: '1.5px solid #fde68a', bgcolor: '#fffbeb' }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#92400e', mb: 1.5, display: 'flex', alignItems: 'center', gap: 0.8 }}>
+              <AddIcon sx={{ fontSize: 18 }} />
+              Log Hour & Reason for Target Deviation
+            </Typography>
+
+            <form onSubmit={(e) => { e.preventDefault(); saveUnmetReasonMutation.mutate(); }}>
+              <Grid container spacing={2} sx={{ alignItems: 'flex-start' }}>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="hour-slot-label">Hour Slot</InputLabel>
+                    <Select
+                      labelId="hour-slot-label"
+                      label="Hour Slot"
+                      value={unmetForm.hour}
+                      onChange={(e) => setUnmetForm({ ...unmetForm, hour: e.target.value })}
+                    >
+                      {HOURLY_TIME_SLOTS.map((slot) => (
+                        <MenuItem key={slot} value={slot}>
+                          {slot}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 3 }}>
+                  <TextField
+                    label="Est. Lost Units (Optional)"
+                    type="number"
+                    size="small"
+                    fullWidth
+                    placeholder="e.g. 100"
+                    value={unmetForm.lostUnits}
+                    onChange={(e) => setUnmetForm({ ...unmetForm, lostUnits: e.target.value === '' ? '' : Math.max(0, Number(e.target.value)) })}
+                  />
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 5 }}>
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    fullWidth
+                    disabled={!unmetForm.reason.trim() || saveUnmetReasonMutation.isPending}
+                    sx={{
+                      bgcolor: '#f59e0b',
+                      color: '#ffffff',
+                      '&:hover': { bgcolor: '#d97706' },
+                      fontWeight: 700,
+                      py: 0.9,
+                      textTransform: 'none',
+                      borderRadius: '8px'
+                    }}
+                  >
+                    {saveUnmetReasonMutation.isPending ? <CircularProgress size={18} color="inherit" /> : 'Add Reason Entry'}
+                  </Button>
+                </Grid>
+
+                <Grid size={{ xs: 12 }}>
+                  <TextField
+                    label="Reason for Target Not Being Met"
+                    placeholder="e.g. Feeder jam for 35 mins; Raw material viscosity mismatch; Die heater sensor fault"
+                    required
+                    fullWidth
+                    multiline
+                    rows={2}
+                    size="small"
+                    value={unmetForm.reason}
+                    onChange={(e) => setUnmetForm({ ...unmetForm, reason: e.target.value })}
+                  />
+                </Grid>
+              </Grid>
+            </form>
+          </Paper>
+
+          {/* List of Entries for this specific schedule */}
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a', mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Recorded Reasons for this Schedule ({modalJobReasons.length})</span>
+              <Typography variant="caption" sx={{ color: '#64748b' }}>
+                All logged reasons are visible in the daily monitoring list below.
+              </Typography>
+            </Typography>
+
+            <TableContainer sx={{ border: '1px solid #e2e8f0', borderRadius: '10px' }}>
+              <Table size="small">
+                <TableHead sx={{ bgcolor: '#f8fafc' }}>
+                  <TableRow sx={{ '& th': { fontWeight: 800, color: '#0f172a', py: 1, fontSize: '0.78rem' } }}>
+                    <TableCell sx={{ width: 130 }}>Hour Slot</TableCell>
+                    <TableCell>Reason for Shortfall</TableCell>
+                    <TableCell sx={{ width: 100, textAlign: 'right' }}>Lost Units</TableCell>
+                    <TableCell sx={{ width: 120 }}>Logged By</TableCell>
+                    <TableCell sx={{ width: 130 }}>Time</TableCell>
+                    <TableCell align="center" sx={{ width: 60 }}>Delete</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {modalJobReasons.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center" sx={{ py: 3.5, color: '#64748b' }}>
+                        <Typography variant="body2" sx={{ color: '#64748b', fontStyle: 'italic' }}>
+                          No reasons entered yet for this order schedule.
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                          Use the form above to record reasons why targets weren't met during any hour.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    modalJobReasons.map((r) => (
+                      <TableRow key={r.id} hover>
+                        <TableCell>
+                          <Chip
+                            label={r.hour}
+                            size="small"
+                            sx={{
+                              bgcolor: '#fef3c7',
+                              color: '#92400e',
+                              fontWeight: 700,
+                              fontSize: '0.72rem',
+                              borderRadius: '6px'
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 600, color: '#0f172a', fontSize: '0.82rem' }}>
+                          {r.reason}
+                        </TableCell>
+                        <TableCell align="right">
+                          {Number(r.lostUnits) > 0 ? (
+                            <Typography variant="caption" sx={{ color: '#dc2626', fontWeight: 800 }}>
+                              -{Number(r.lostUnits).toLocaleString()} u
+                            </Typography>
+                          ) : (
+                            <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                              —
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: '0.78rem', color: '#475569' }}>
+                          {r.enteredBy || r.enteredByEmail || 'Operator'}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem', color: '#64748b' }}>
+                          {formatTimestamp(r.createdAt)}
+                        </TableCell>
+                        <TableCell align="center">
+                          <Tooltip title="Delete this reason">
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                if (confirm(`Delete this reason entry for ${r.hour}?`)) {
+                                  deleteUnmetReasonMutation.mutate(r.id);
+                                }
+                              }}
+                            >
+                              <DeleteForeverIcon sx={{ fontSize: 17, color: '#ef4444' }} />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2.5, pt: 1, borderTop: '1px solid #e2e8f0' }}>
+          <Button
+            onClick={() => setUnmetModal({ open: false, job: null })}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Toast Notification */}
       <Snackbar

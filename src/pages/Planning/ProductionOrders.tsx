@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/authStore';
 import {
   getProductionCategories,
+  getSections,
   getProductionOrders,
   createProductionOrder,
   updateProductionOrder,
@@ -53,8 +54,10 @@ import ExcelJS from 'exceljs';
 export const ProductionOrders: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { tenant } = useAuthStore();
-  const tenantId = tenant?.id || '';
+  const { tenant, activeCompany } = useAuthStore();
+  const currentTenantId = activeCompany || tenant?.id || 'rileys';
+  const tenantId = currentTenantId;
+  const isToyo = currentTenantId === 'toyo';
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -85,7 +88,13 @@ export const ProductionOrders: React.FC = () => {
   const { data: categories = [] } = useQuery({
     queryKey: ['productionCategories', tenantId],
     queryFn: () => getProductionCategories(tenantId),
-    enabled: !!tenantId,
+    enabled: !isToyo && !!tenantId,
+  });
+
+  const { data: sections = [] } = useQuery({
+    queryKey: ['sections', tenantId],
+    queryFn: () => getSections(tenantId),
+    enabled: isToyo && !!tenantId,
   });
 
   const { data: orders = [], isLoading: loadingOrders } = useQuery({
@@ -129,6 +138,7 @@ export const ProductionOrders: React.FC = () => {
     orderNumber: '',
     productName: '',
     categoryId: '',
+    sectionId: '',
     quantity: 1000,
     dueDate: toLocalDateString(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
     priority: 'MEDIUM' as 'HIGH' | 'MEDIUM' | 'LOW',
@@ -147,7 +157,8 @@ export const ProductionOrders: React.FC = () => {
       setOrderForm({
         orderNumber: '',
         productName: '',
-        categoryId: categories[0]?.id || '',
+        categoryId: !isToyo ? (categories[0]?.id || '') : '',
+        sectionId: isToyo ? (sections[0]?.id || '') : '',
         quantity: 1000,
         dueDate: toLocalDateString(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
         priority: 'MEDIUM',
@@ -179,7 +190,7 @@ export const ProductionOrders: React.FC = () => {
     onError: (err: any) => showToast('Error deleting order: ' + err.message, 'error')
   });
 
-  // Category Maps
+  // Category Maps (for Riley's)
   const categoryMap = useMemo(() => {
     const map: Record<string, string> = {};
     categories.forEach(c => {
@@ -195,6 +206,42 @@ export const ProductionOrders: React.FC = () => {
     });
     return map;
   }, [categories]);
+
+  // Section Maps (for Toyo)
+  const sectionMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    sections.forEach(s => {
+      map[s.id] = s.sectionName;
+    });
+    return map;
+  }, [sections]);
+
+  const sectionNameToId = useMemo(() => {
+    const map: Record<string, string> = {};
+    sections.forEach(s => {
+      map[s.sectionName.toLowerCase().trim()] = s.id;
+      if (s.sectionCode) {
+        map[s.sectionCode.toLowerCase().trim()] = s.id;
+      }
+    });
+    return map;
+  }, [sections]);
+
+  // Group display name resolver (Section for Toyo, Category for Riley's)
+  const getOrderGroupName = (order: ProductionOrder): string => {
+    if (isToyo) {
+      if (order.sectionId && sectionMap[order.sectionId]) {
+        return sectionMap[order.sectionId];
+      }
+      if (order.sectionName) return order.sectionName;
+      if (order.categoryId && categoryMap[order.categoryId]) {
+        return categoryMap[order.categoryId];
+      }
+      return 'General';
+    } else {
+      return (order.categoryId && categoryMap[order.categoryId]) || 'General';
+    }
+  };
 
   // Date Preset Switcher
   const handleApplyPreset = (preset: 'CURRENT_WEEK' | 'THIS_MONTH' | 'ALL_TIME') => {
@@ -224,8 +271,8 @@ export const ProductionOrders: React.FC = () => {
         const match = search.toLowerCase();
         const num = (o.orderNumber || '').toLowerCase();
         const prod = (o.productName || '').toLowerCase();
-        const catName = (categoryMap[o.categoryId] || '').toLowerCase();
-        if (!num.includes(match) && !prod.includes(match) && !catName.includes(match)) {
+        const groupName = getOrderGroupName(o).toLowerCase();
+        if (!num.includes(match) && !prod.includes(match) && !groupName.includes(match)) {
           return false;
         }
       }
@@ -239,12 +286,12 @@ export const ProductionOrders: React.FC = () => {
 
       return true;
     });
-  }, [orders, statusFilter, search, fromDate, toDate, categoryMap]);
+  }, [orders, statusFilter, search, fromDate, toDate, isToyo, sectionMap, categoryMap]);
 
   // Handsontable Data Format
   const hotData = useMemo(() => {
     return filteredOrders.map((o, index) => {
-      const catName = categoryMap[o.categoryId] || 'General';
+      const groupName = getOrderGroupName(o);
       const dueStr = toLocalDateString(o.dueDate);
 
       return {
@@ -252,7 +299,7 @@ export const ProductionOrders: React.FC = () => {
         id: o.id,
         orderNumber: o.orderNumber || '',
         productName: o.productName || '',
-        category: catName,
+        category: groupName, // Displayed in the Group column
         quantity: o.quantity || 0,
         dueDate: dueStr,
         priority: o.priority || 'MEDIUM',
@@ -260,7 +307,7 @@ export const ProductionOrders: React.FC = () => {
         actions: 'ACTIONS'
       };
     });
-  }, [filteredOrders, categoryMap]);
+  }, [filteredOrders, isToyo, sectionMap, categoryMap]);
 
   // Open Create Order Modal
   const handleOpenCreateOrder = () => {
@@ -268,7 +315,8 @@ export const ProductionOrders: React.FC = () => {
     setOrderForm({
       orderNumber: `ORD-${Math.floor(100 + Math.random() * 900)}`,
       productName: '',
-      categoryId: categories[0]?.id || '',
+      categoryId: !isToyo ? (categories[0]?.id || '') : '',
+      sectionId: isToyo ? (sections[0]?.id || '') : '',
       quantity: 2000,
       dueDate: toLocalDateString(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
       priority: 'MEDIUM',
@@ -284,7 +332,8 @@ export const ProductionOrders: React.FC = () => {
     setOrderForm({
       orderNumber: order.orderNumber,
       productName: order.productName,
-      categoryId: order.categoryId || categories[0]?.id || '',
+      categoryId: order.categoryId || (!isToyo ? (categories[0]?.id || '') : ''),
+      sectionId: (order as any).sectionId || (isToyo ? (sections[0]?.id || '') : ''),
       quantity: order.quantity,
       dueDate: toLocalDateString(order.dueDate),
       priority: order.priority || 'MEDIUM',
@@ -297,37 +346,67 @@ export const ProductionOrders: React.FC = () => {
   // Submit Create / Edit Order Form
   const handleSaveOrder = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!orderForm.orderNumber || !orderForm.productName || !orderForm.categoryId) {
+    if (!orderForm.orderNumber || !orderForm.productName) {
       showToast('Please fill out all required fields', 'warning');
       return;
     }
 
+    if (isToyo) {
+      if (!orderForm.sectionId) {
+        showToast('Please select a section', 'warning');
+        return;
+      }
+    } else {
+      if (!orderForm.categoryId) {
+        showToast('Please select a category', 'warning');
+        return;
+      }
+    }
+
+    const secName = orderForm.sectionId ? (sectionMap[orderForm.sectionId] || '') : '';
+
     if (editingOrder) {
+      const updateData: any = {
+        orderNumber: orderForm.orderNumber.trim(),
+        productName: orderForm.productName.trim(),
+        quantity: Number(orderForm.quantity),
+        dueDate: parseLocalDate(orderForm.dueDate),
+        priority: orderForm.priority,
+        status: orderForm.status,
+        notes: orderForm.notes.trim()
+      };
+
+      if (isToyo) {
+        updateData.sectionId = orderForm.sectionId;
+        updateData.sectionName = secName;
+      } else {
+        updateData.categoryId = orderForm.categoryId;
+      }
+
       updateOrderMutation.mutate({
         id: editingOrder.id,
-        data: {
-          orderNumber: orderForm.orderNumber.trim(),
-          productName: orderForm.productName.trim(),
-          categoryId: orderForm.categoryId,
-          quantity: Number(orderForm.quantity),
-          dueDate: parseLocalDate(orderForm.dueDate),
-          priority: orderForm.priority,
-          status: orderForm.status,
-          notes: orderForm.notes.trim()
-        }
+        data: updateData
       });
     } else {
-      createOrderMutation.mutate({
+      const createData: any = {
         tenantId,
         orderNumber: orderForm.orderNumber.trim(),
         productName: orderForm.productName.trim(),
-        categoryId: orderForm.categoryId,
         quantity: Number(orderForm.quantity),
         dueDate: parseLocalDate(orderForm.dueDate),
         status: orderForm.status || 'PENDING',
         priority: orderForm.priority,
         notes: orderForm.notes.trim()
-      });
+      };
+
+      if (isToyo) {
+        createData.sectionId = orderForm.sectionId;
+        createData.sectionName = secName;
+      } else {
+        createData.categoryId = orderForm.categoryId;
+      }
+
+      createOrderMutation.mutate(createData);
     }
   };
 
@@ -338,20 +417,27 @@ export const ProductionOrders: React.FC = () => {
       workbook.creator = 'Production Planning Tool';
       workbook.created = new Date();
 
-      // Live categories from database
+      // Active options: Sections for Toyo, Categories for Riley's
+      const activeSectionNames = sections.length > 0
+        ? sections.map(s => s.sectionName.trim()).filter(Boolean)
+        : ['Press Section', 'Assembly Section', 'Welding Section'];
+
       const activeCategoryNames = categories.length > 0 
         ? categories.map(c => c.name.trim()).filter(Boolean)
         : ['Standard Assembly', 'General'];
-      const sampleCategory1 = activeCategoryNames[0] || 'General';
-      const sampleCategory2 = activeCategoryNames[1] || activeCategoryNames[0] || 'General';
+
+      const activeGroupNames = isToyo ? activeSectionNames : activeCategoryNames;
+      const sampleGroup1 = activeGroupNames[0] || (isToyo ? 'Assembly Section' : 'General');
+      const sampleGroup2 = activeGroupNames[1] || activeGroupNames[0] || (isToyo ? 'Press Section' : 'General');
 
       // 1. FIRST SHEET: Main Production Orders Template Sheet (Active Primary Tab)
       const worksheet = workbook.addWorksheet('Production_Orders');
 
+      const groupColHeader = isToyo ? 'Section' : 'Category';
       worksheet.columns = [
         { header: 'Order Number', key: 'orderNumber', width: 18 },
         { header: 'Product Name', key: 'productName', width: 34 },
-        { header: 'Category', key: 'category', width: 24 },
+        { header: groupColHeader, key: 'group', width: 24 },
         { header: 'Quantity', key: 'quantity', width: 16 },
         { header: 'Due Date', key: 'dueDate', width: 18 },
         { header: 'Priority', key: 'priority', width: 16 },
@@ -365,7 +451,7 @@ export const ProductionOrders: React.FC = () => {
       headerRow.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'FF4338CA' } // Premium Indigo
+        fgColor: { argb: isToyo ? 'FF0F766E' : 'FF4338CA' } // Distinct Teal for Toyo, Indigo for Riley's
       };
       headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
       headerRow.height = 26;
@@ -373,30 +459,30 @@ export const ProductionOrders: React.FC = () => {
       // Add Sample Rows
       worksheet.addRow({
         orderNumber: 'ORD-101',
-        productName: 'Premium Cotton Crew T-Shirt',
-        category: sampleCategory1,
+        productName: isToyo ? 'Automotive Stamping Bracket A1' : 'Premium Cotton Crew T-Shirt',
+        group: sampleGroup1,
         quantity: 2500,
         dueDate: toLocalDateString(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
         priority: 'HIGH',
         status: 'PENDING',
-        notes: 'Export shipment for summer campaign'
+        notes: isToyo ? 'Batch run for assembly line 1' : 'Export shipment for summer campaign'
       });
 
       worksheet.addRow({
         orderNumber: 'ORD-102',
-        productName: 'Slim Fit Pique Polo Shirt',
-        category: sampleCategory2,
+        productName: isToyo ? 'Precision Metal Chassis Frame' : 'Slim Fit Pique Polo Shirt',
+        group: sampleGroup2,
         quantity: 4000,
         dueDate: toLocalDateString(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)),
         priority: 'MEDIUM',
         status: 'PENDING',
-        notes: 'Standard bulk retail run'
+        notes: isToyo ? 'Standard production run' : 'Standard bulk retail run'
       });
 
       // 2. SECOND SHEET: Reference Sheet for Dropdowns
       const refSheet = workbook.addWorksheet('Allowed_Options', { state: 'visible' });
       refSheet.columns = [
-        { header: 'Allowed Categories', key: 'categories', width: 28 },
+        { header: isToyo ? 'Allowed Sections' : 'Allowed Categories', key: 'groups', width: 28 },
         { header: 'Allowed Priorities', key: 'priorities', width: 20 },
         { header: 'Allowed Statuses', key: 'statuses', width: 24 }
       ];
@@ -411,18 +497,18 @@ export const ProductionOrders: React.FC = () => {
 
       const priorities = ['HIGH', 'MEDIUM', 'LOW'];
       const statuses = ['PENDING', 'DRAFT_PLANNED', 'SCHEDULED', 'COMPLETED'];
-      const maxRows = Math.max(activeCategoryNames.length, priorities.length, statuses.length);
+      const maxRows = Math.max(activeGroupNames.length, priorities.length, statuses.length);
 
       for (let i = 0; i < maxRows; i++) {
         refSheet.addRow({
-          categories: activeCategoryNames[i] || '',
+          groups: activeGroupNames[i] || '',
           priorities: priorities[i] || '',
           statuses: statuses[i] || ''
         });
       }
 
       // Data validation ranges pointing to sheet 'Allowed_Options'
-      const categoryRange = `Allowed_Options!$A$2:$A$${activeCategoryNames.length + 1}`;
+      const groupRange = `Allowed_Options!$A$2:$A$${activeGroupNames.length + 1}`;
       const priorityList = '"HIGH,MEDIUM,LOW"';
       const statusList = '"PENDING,DRAFT_PLANNED,SCHEDULED,COMPLETED"';
 
@@ -431,14 +517,14 @@ export const ProductionOrders: React.FC = () => {
         const row = worksheet.getRow(r);
         row.alignment = { vertical: 'middle' };
 
-        // Category dropdown (Col C / 3)
+        // Section / Category dropdown (Col C / 3)
         row.getCell(3).dataValidation = {
           type: 'list',
           allowBlank: true,
-          formulae: [categoryRange],
+          formulae: [groupRange],
           showErrorMessage: true,
-          errorTitle: 'Invalid Category',
-          error: 'Please select a valid category from the dropdown list.'
+          errorTitle: isToyo ? 'Invalid Section' : 'Invalid Category',
+          error: `Please select a valid ${isToyo ? 'section' : 'category'} from the dropdown list.`
         };
 
         // Quantity formatting (Col D / 4)
@@ -481,13 +567,13 @@ export const ProductionOrders: React.FC = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'Production_Orders_Template.xlsx';
+      a.download = isToyo ? 'Production_Orders_Template_Toyo.xlsx' : 'Production_Orders_Template.xlsx';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
 
-      showToast('Template downloaded with Production Orders as primary sheet and live dropdowns!', 'success');
+      showToast(`Template downloaded with ${isToyo ? 'Sections' : 'Categories'} as primary sheet and live dropdowns!`, 'success');
     } catch (err: any) {
       showToast(`Error generating template: ${err.message}`, 'error');
     }
@@ -519,6 +605,7 @@ export const ProductionOrders: React.FC = () => {
 
         let importedCount = 0;
         const defaultCatId = categories[0]?.id || '';
+        const defaultSecId = sections[0]?.id || '';
         const timestampSeed = Date.now().toString().slice(-4);
 
         for (const row of rows) {
@@ -545,8 +632,12 @@ export const ProductionOrders: React.FC = () => {
             ''
           ).trim();
 
+          const hasGroupData = isToyo
+            ? (row['Section'] || row['section'] || row['Section Name'] || row['sectionName'] || row['Category'] || row['category'])
+            : (row['Category'] || row['category'] || row['Category Name']);
+
           // Skip row only if it is completely empty
-          if (!orderNum && !prodName && !row['Category'] && !row['category'] && !row['Quantity'] && !row['quantity']) {
+          if (!orderNum && !prodName && !hasGroupData && !row['Quantity'] && !row['quantity']) {
             continue;
           }
 
@@ -556,9 +647,31 @@ export const ProductionOrders: React.FC = () => {
 
           const finalProdName = prodName || `Production Item ${importedCount + 1}`;
 
-          // 2. Category
-          const catName = String(row['Category'] || row['category'] || row['Category Name'] || '').toLowerCase().trim();
-          const categoryId = categoryNameToId[catName] || defaultCatId;
+          // 2. Section (Toyo) or Category (Riley's)
+          let sectionId = '';
+          let sectionName = '';
+          let categoryId = '';
+
+          if (isToyo) {
+            const rawSec = String(
+              row['Section'] ||
+              row['section'] ||
+              row['Section Name'] ||
+              row['sectionName'] ||
+              row['Section Code'] ||
+              row['sectionCode'] ||
+              row['Category'] ||
+              row['category'] ||
+              ''
+            ).trim();
+
+            const secKey = rawSec.toLowerCase();
+            sectionId = sectionNameToId[secKey] || defaultSecId;
+            sectionName = sectionMap[sectionId] || rawSec || (sections[0]?.sectionName || '');
+          } else {
+            const catName = String(row['Category'] || row['category'] || row['Category Name'] || '').toLowerCase().trim();
+            categoryId = categoryNameToId[catName] || defaultCatId;
+          }
 
           // 3. Quantity
           const rawQty = row['Quantity'] || row['quantity'] || row['Target Volume'] || row['Units'] || row['Target Quantity (Units)'];
@@ -594,17 +707,25 @@ export const ProductionOrders: React.FC = () => {
           // 7. Notes
           const notes = String(row['Notes'] || row['notes'] || row['Instructions'] || '').trim();
 
-          await createProductionOrder({
+          const newOrderData: any = {
             tenantId,
             orderNumber: orderNum,
             productName: finalProdName,
-            categoryId,
             quantity: finalQty,
             dueDate,
             status,
             priority,
             notes
-          });
+          };
+
+          if (isToyo) {
+            newOrderData.sectionId = sectionId;
+            newOrderData.sectionName = sectionName;
+          } else {
+            newOrderData.categoryId = categoryId;
+          }
+
+          await createProductionOrder(newOrderData);
           importedCount++;
         }
 
@@ -625,7 +746,7 @@ export const ProductionOrders: React.FC = () => {
       '#': idx + 1,
       'Order Number': o.orderNumber,
       'Product Name': o.productName,
-      'Category': categoryMap[o.categoryId] || 'General',
+      [isToyo ? 'Section' : 'Category']: getOrderGroupName(o),
       'Target Quantity (Units)': o.quantity || 0,
       'Due Date': toLocalDateString(o.dueDate),
       'Priority': o.priority || 'MEDIUM',
@@ -636,7 +757,7 @@ export const ProductionOrders: React.FC = () => {
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(exportData);
     XLSX.utils.book_append_sheet(wb, ws, 'Production_Orders');
-    XLSX.writeFile(wb, 'Production_Orders_Export.xlsx');
+    XLSX.writeFile(wb, `Production_Orders_Export_${isToyo ? 'Toyo' : 'Rileys'}.xlsx`);
     showToast('Orders exported to Excel successfully!', 'success');
   };
 
@@ -854,7 +975,7 @@ export const ProductionOrders: React.FC = () => {
                   '#',
                   'Order Number',
                   'Product Name',
-                  'Category',
+                  isToyo ? 'Section' : 'Category',
                   'Target Volume (Units)',
                   'Exp. Delivery Date',
                   'Priority',
@@ -1129,18 +1250,39 @@ export const ProductionOrders: React.FC = () => {
 
               <Grid container spacing={2}>
                 <Grid size={6}>
-                  <FormControl fullWidth size="small" required>
-                    <InputLabel>Category</InputLabel>
-                    <Select
-                      label="Category"
-                      value={orderForm.categoryId}
-                      onChange={(e) => setOrderForm({ ...orderForm, categoryId: e.target.value })}
-                    >
-                      {categories.map((c) => (
-                        <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  {isToyo ? (
+                    <FormControl fullWidth size="small" required>
+                      <InputLabel>Section</InputLabel>
+                      <Select
+                        label="Section"
+                        value={orderForm.sectionId}
+                        onChange={(e) => setOrderForm({ ...orderForm, sectionId: e.target.value })}
+                      >
+                        {sections.length === 0 ? (
+                          <MenuItem value="" disabled>No sections configured</MenuItem>
+                        ) : (
+                          sections.map((s) => (
+                            <MenuItem key={s.id} value={s.id}>
+                              {s.sectionName} {s.sectionCode ? `(${s.sectionCode})` : ''}
+                            </MenuItem>
+                          ))
+                        )}
+                      </Select>
+                    </FormControl>
+                  ) : (
+                    <FormControl fullWidth size="small" required>
+                      <InputLabel>Category</InputLabel>
+                      <Select
+                        label="Category"
+                        value={orderForm.categoryId}
+                        onChange={(e) => setOrderForm({ ...orderForm, categoryId: e.target.value })}
+                      >
+                        {categories.map((c) => (
+                          <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
                 </Grid>
                 <Grid size={6}>
                   <TextField

@@ -32,6 +32,7 @@ import { ScheduleCreation } from './pages/Planning/ScheduleCreation';
 import { ProductionSchedule } from './pages/Planning/ProductionSchedule';
 import { DailyOutputEntry } from './pages/Planning/DailyOutputEntry';
 import { FactoryCalendar } from './pages/Planning/FactoryCalendar';
+import { MonthlyReports } from './pages/Planning/MonthlyReports';
 
 // Masters Pages
 import { Machines } from './pages/Masters/Machines';
@@ -211,6 +212,18 @@ function App() {
                     <DailyOutputEntry />
                   </GuardedRoute>
                 }
+              />
+              <Route
+                path="monthly-reports"
+                element={
+                  <GuardedRoute module="production" action="view">
+                    <MonthlyReports />
+                  </GuardedRoute>
+                }
+              />
+              <Route
+                path="monthly-archives"
+                element={<Navigate to="/monthly-reports" replace />}
               />
               <Route
                 path="factory-calendar"

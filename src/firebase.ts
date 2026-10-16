@@ -1,6 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, connectAuthEmulator, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 
 // Production Firebase configuration
@@ -18,6 +19,7 @@ export const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app, "rileys-production-dashboard");
+const storage = getStorage(app);
 
 // Analytics initialization (supported in browser)
 let analytics: any = null;
@@ -61,5 +63,5 @@ export const registerSecondaryUser = async (email: string, password: string) => 
   return credential.user;
 };
 
-export { app, auth, db, analytics };
+export { app, auth, db, storage, analytics };
 

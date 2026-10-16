@@ -37,6 +37,7 @@ import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturing';
 import CategoryIcon from '@mui/icons-material/Category';
 import LayersIcon from '@mui/icons-material/Layers';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 
 export const Landing: React.FC = () => {
   const navigate = useNavigate();
@@ -132,6 +133,16 @@ export const Landing: React.FC = () => {
       module: 'downtime',
       action: 'create',
       actionText: 'Log Downtime Event'
+    },
+    {
+      title: 'Monthly Reports & Archives',
+      description: 'Flattened reconciliation of planned vs actual volumes, shortfall reasons, and persistent cloud Excel archives.',
+      icon: <AssessmentIcon sx={{ fontSize: 32, color: '#4f46e5' }} />,
+      bg: 'rgba(79, 70, 229, 0.08)',
+      path: '/monthly-reports',
+      module: 'production',
+      action: 'view',
+      actionText: 'View Monthly Reports & Vault'
     },
     {
       title: 'Production Analytics',
